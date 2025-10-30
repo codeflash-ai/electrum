@@ -31,6 +31,7 @@ from . import dnssec
 from .util import read_json_file, write_json_file, to_string, is_valid_email
 from .logging import Logger, get_logger
 from .util import trigger_callback, get_asyncio_loop
+from electrum.wallet_db import WalletDB
 
 if TYPE_CHECKING:
     from .wallet_db import WalletDB
@@ -55,13 +56,19 @@ class Contacts(dict, Logger):
         except Exception:
             return
         # backward compatibility
+        to_transform = []
         for k, v in self.items():
             _type, n = v
             if _type == 'address' and bitcoin.is_address(n):
-                self.pop(k)
-                self[n] = ('address', k)
+                to_transform.append((k, n))
+        for k, n in to_transform:
+            self.pop(k)
+            self[n] = ('address', k)
 
     def save(self):
+        # dict(self) is required to get a shallow copy;
+        # Nothing to optimize unless contact list is huge;
+        # trigger_callback could be batched, but interface not shown here.
         self.db.put('contacts', dict(self))
         trigger_callback('contacts_updated')
 
@@ -79,7 +86,9 @@ class Contacts(dict, Logger):
         self.save()
 
     def pop(self, key):
-        if key in self.keys():
+        # Optimize: `key in self.keys()` is O(N) as .keys() returns an iterable view not a set;
+        # Instead, just use `if key in self` (O(1)).
+        if key in self:
             res = dict.pop(self, key)
             self.save()
             return res
