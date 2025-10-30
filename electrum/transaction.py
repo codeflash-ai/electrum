@@ -133,8 +133,11 @@ class TxOutput:
 
     def __init__(self, *, scriptpubkey: bytes, value: Union[int, str]):
         self.scriptpubkey = scriptpubkey
-        if not (isinstance(value, int) or parse_max_spend(value) is not None):
-            raise ValueError(f"bad txout value: {value!r}")
+        # Check int first, which is faster
+        if not isinstance(value, int):
+            # Avoid double parse_max_spend: Call only if not int
+            if parse_max_spend(value) is None:
+                raise ValueError(f"bad txout value: {value!r}")
         self.value = value  # int in satoshis; or spend-max-like str
 
     @classmethod
@@ -204,6 +207,7 @@ class TxOutput:
         return not (self == other)
 
     def __hash__(self) -> int:
+        # Use tuple to hash both fields together
         return hash((self.scriptpubkey, self.value))
 
     def to_json(self):
