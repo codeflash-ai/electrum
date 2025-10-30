@@ -136,6 +136,7 @@ class TxOutput:
         if not (isinstance(value, int) or parse_max_spend(value) is not None):
             raise ValueError(f"bad txout value: {value!r}")
         self.value = value  # int in satoshis; or spend-max-like str
+        self._scriptpubkey_hex = scriptpubkey.hex()
 
     @classmethod
     def from_address_and_value(cls, address: str, value: Union[int, str]) -> Union['TxOutput', 'PartialTxOutput']:
@@ -193,7 +194,8 @@ class TxOutput:
         return f"SCRIPT {self.scriptpubkey.hex()}"
 
     def __repr__(self):
-        return f"<TxOutput script={self.scriptpubkey.hex()} address={self.address} value={self.value}>"
+        # Optimization: use the cached hex string to avoid recomputation/heap allocation
+        return f"<TxOutput script={self._scriptpubkey_hex} address={self.address} value={self.value}>"
 
     def __eq__(self, other):
         if not isinstance(other, TxOutput):
