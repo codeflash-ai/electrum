@@ -423,7 +423,7 @@ class TxInput:
         d = {
             'prevout_hash': self.prevout.txid.hex(),
             'prevout_n': self.prevout.out_idx,
-            'coinbase': self.is_coinbase_output(),
+            'coinbase': self._is_coinbase_output,
             'nsequence': self.nsequence,
         }
         if self.script_sig is not None:
@@ -444,12 +444,20 @@ class TxInput:
         return s
 
     def witness_elements(self) -> Sequence[bytes]:
-        if not self.witness:
+        # Fast-path: empty or None witness early return.
+        witness = self.witness
+        if not witness:
             return []
+        # Use local scope for BCDataStream; avoid attribute lookups
         vds = BCDataStream()
-        vds.write(self.witness)
+        vds.write(witness)
         n = vds.read_compact_size()
-        return list(vds.read_bytes(vds.read_compact_size()) for i in range(n))
+        # Pre-fetch method lookup outside list comprehension for performance
+        vds_read_bytes = vds.read_bytes
+        vds_read_compact_size = vds.read_compact_size
+        # Allocate list directly for speed
+        result = [vds_read_bytes(vds_read_compact_size()) for _ in range(n)]
+        return result
 
     def is_segwit(self, *, guess_for_address=False) -> bool:
         if self.witness not in (b'\x00', b'', None):
