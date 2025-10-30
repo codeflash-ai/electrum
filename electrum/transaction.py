@@ -621,7 +621,13 @@ class BCDataStream(object):
     def read_int32(self): return self._read_num('<i')
     def read_uint32(self): return self._read_num('<I')
     def read_int64(self): return self._read_num('<q')
-    def read_uint64(self): return self._read_num('<Q')
+    def read_uint64(self):
+        try:
+            i = struct.unpack_from('<Q', self.input, self.read_cursor)[0]
+            self.read_cursor += 8
+        except Exception as e:
+            raise SerializationError(e) from e
+        return i
 
     def write_boolean(self, val): return self.write(b'\x01' if val else b'\x00')
     def write_int16(self, val): return self._write_num('<h', val)
