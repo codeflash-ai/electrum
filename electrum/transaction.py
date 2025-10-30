@@ -624,7 +624,8 @@ class BCDataStream(object):
     def read_uint64(self): return self._read_num('<Q')
 
     def write_boolean(self, val): return self.write(b'\x01' if val else b'\x00')
-    def write_int16(self, val): return self._write_num('<h', val)
+    def write_int16(self, val):
+        return self._write_num('<h', val)
     def write_uint16(self, val): return self._write_num('<H', val)
     def write_int32(self, val): return self._write_num('<i', val)
     def write_uint32(self, val): return self._write_num('<I', val)
@@ -672,7 +673,11 @@ class BCDataStream(object):
 
     def _write_num(self, format, num):
         s = struct.pack(format, num)
-        self.write(s)
+        input_ = self.input
+        if input_ is None:
+            self.input = bytearray(s)
+        else:
+            input_.extend(s)
 
 
 def script_GetOp(_bytes : bytes):
