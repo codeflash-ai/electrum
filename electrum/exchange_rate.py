@@ -43,12 +43,11 @@ SPOT_RATE_EXPIRY = 600              # spot price becomes stale after 10 minutes 
 
 
 class ExchangeBase(Logger):
-
     def __init__(self, on_quotes, on_history):
         Logger.__init__(self)
-        self._history = {}  # type: Dict[str, Dict[str, str | float]]
-        self._quotes = {}  # type: Dict[str, Optional[Decimal]]
-        self._quotes_timestamp = 0  # type: Union[int, float]
+        self._history: Dict[str, Dict[str, str | float]] = {}
+        self._quotes: Dict[str, Optional[Decimal]] = {}
+        self._quotes_timestamp: Union[int, float] = 0
         self.on_quotes = on_quotes
         self.on_history = on_history
 
@@ -64,13 +63,12 @@ class ExchangeBase(Logger):
 
     async def get_json(self, site, get_string):
         # APIs must have https
-        url = ''.join(['https://', site, get_string])
+        url = f'https://{site}{get_string}'
         network = Network.get_instance()
         proxy = network.proxy if network else None
         async with make_aiohttp_session(proxy) as session:
             async with session.get(url) as response:
                 response.raise_for_status()
-                # set content_type to None to disable checking MIME type
                 return await response.json(content_type=None)
 
     async def get_csv(self, site, get_string):
@@ -224,8 +222,19 @@ class Yadio(ExchangeBase):
         return list(dicts.keys())
 
     async def get_rates(self, ccy: str) -> Mapping[str, Optional[Decimal]]:
-        json = await self.get_json('api.yadio.io', '/rate/%s/BTC' % ccy)
-        return {ccy: to_decimal(json['rate'])}
+        # Inline to_decimal for this performance-critical call to avoid extra function call overhead
+        # Fast-path logic improved for int/Decimal, only one isinstance check per path.
+        json = await self.get_json('api.yadio.io', f'/rate/{ccy}/BTC')
+        rate = json['rate']
+        # Begin inlined to_decimal:
+        if isinstance(rate, Decimal):
+            dec_rate = rate
+        elif isinstance(rate, int):
+            dec_rate = Decimal(rate)
+        else:
+            # Handles str and float (behaviorally same as to_decimal):
+            dec_rate = Decimal(str(rate))
+        return {ccy: dec_rate}
 
 
 class BitcoinAverage(ExchangeBase):
