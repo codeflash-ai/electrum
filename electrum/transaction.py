@@ -616,7 +616,17 @@ class BCDataStream(object):
         return self.read_cursor < len(self.input)
 
     def read_boolean(self) -> bool: return self.read_bytes(1) != b'\x00'
-    def read_int16(self): return self._read_num('<h')
+    def read_int16(self):
+        # Inline struct.calcsize to avoid repeated calls through self._read_num
+        try:
+            input_ = self.input
+            idx = self.read_cursor
+            # '<h' is always 2
+            i = struct.unpack_from('<h', input_, idx)[0]
+            self.read_cursor = idx + 2
+        except Exception as e:
+            raise SerializationError(e) from e
+        return i
     def read_uint16(self): return self._read_num('<H')
     def read_int32(self): return self._read_num('<i')
     def read_uint32(self): return self._read_num('<I')
