@@ -35,6 +35,8 @@ from .logging import get_logger, Logger
 if TYPE_CHECKING:
     from .simple_config import SimpleConfig
 
+_GENESIS = constants.net.GENESIS
+
 _logger = get_logger(__name__)
 
 HEADER_SIZE = 80  # bytes
@@ -164,7 +166,7 @@ def read_blockchains(config: 'SimpleConfig'):
 
 
 def get_best_chain() -> 'Blockchain':
-    return blockchains[constants.net.GENESIS]
+    return blockchains[_GENESIS]
 
 
 # block hash -> chain work; up to and including that block
