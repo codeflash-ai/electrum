@@ -94,22 +94,33 @@ def _ensure_translation_keeps_format_string_syntax_similar(translator):
 #       However, only if the translators understand and use it correctly!
 #          _("time left: {0} minutes, {1} seconds").format(t//60, t%60)                   # <- works. ok to use
 #          _("time left: {mins} minutes, {secs} seconds").format(mins=t//60, secs=t%60)   # <- works, but too complex
-@_ensure_translation_keeps_format_string_syntax_similar
 def _(msg: str, *, context=None) -> str:
     if msg == "":
         return ""  # empty string must not be translated. see #7158
+    lang = _language  # local variable lookup is faster than global
     if context:
-        contexts = [context]
-        if context[-1] != "|":  # try with both "|" suffix and without
-            contexts.append(context + "|")
+        ctx = context
+        # Use less memory and CPU by avoiding a list and explicit for loop.
+        if ctx[-1] != "|":
+            # First try with context as-is
+            out = lang.pgettext(ctx, msg)
+            if out != msg:
+                return out
+            # Then try with "|" suffix added
+            out = lang.pgettext(ctx + "|", msg)
+            if out != msg:
+                return out
         else:
-            contexts.append(context[:-1])
-        for ctx in contexts:
-            out = _language.pgettext(ctx, msg)
-            if out != msg:  # found non-trivial translation
+            # Try with context as-is
+            out = lang.pgettext(ctx, msg)
+            if out != msg:
+                return out
+            # Then try with "|" stripped
+            out = lang.pgettext(ctx[:-1], msg)
+            if out != msg:
                 return out
         # else try without context
-    return _language.gettext(msg)
+    return lang.gettext(msg)
 
 
 def set_language(x: Optional[str]) -> None:
