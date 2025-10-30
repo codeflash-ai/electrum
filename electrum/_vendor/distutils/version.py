@@ -327,7 +327,14 @@ class LooseVersion (Version):
 
 
     def __repr__ (self):
-        return "LooseVersion ('%s')" % str(self)
+        # Avoid unnecessary coercion to str(self) (which would call __str__ if present),
+        # use self.vstring which always exists after .parse() as per original implementation.
+        # If parse() never called, fallback to repr super
+        v = getattr(self, 'vstring', None)
+        if v is not None:
+            return f"LooseVersion ('{v}')"
+        else:
+            return super().__repr__()
 
 
     def _cmp (self, other):
