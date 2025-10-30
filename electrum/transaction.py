@@ -136,6 +136,7 @@ class TxOutput:
         if not (isinstance(value, int) or parse_max_spend(value) is not None):
             raise ValueError(f"bad txout value: {value!r}")
         self.value = value  # int in satoshis; or spend-max-like str
+        self._address_cache = None
 
     @classmethod
     def from_address_and_value(cls, address: str, value: Union[int, str]) -> Union['TxOutput', 'PartialTxOutput']:
@@ -213,6 +214,18 @@ class TxOutput:
             'value_sats': self.value,
         }
         return d
+
+    @property
+    def address(self):
+        if self._address_cache is not None:
+            return self._address_cache
+        addr = getattr(type(self), 'address', None)
+        if addr is not None and callable(addr):
+            computed = addr(self)
+        else:
+            computed = self.__dict__.get('address', None)
+        self._address_cache = computed
+        return computed
 
 
 class BIP143SharedTxDigestFields(NamedTuple):  # witness v0
