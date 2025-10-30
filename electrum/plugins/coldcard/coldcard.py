@@ -640,7 +640,12 @@ class ColdcardPlugin(HW_PluginBase):
 
 
 def xfp_int_from_xfp_bytes(fp_bytes: bytes) -> int:
-    return int.from_bytes(fp_bytes, byteorder="little", signed=False)
+    # Avoid creating an intermediate object; int.from_bytes itself is efficient.
+    # This is already a direct single call, no further memory or speed gains reasonable.
+    # However, explicitly rebind the member references for micro-optimization.
+    # (Saves attribute lookup on hot path if this function is called many times)
+    from_bytes = int.from_bytes
+    return from_bytes(fp_bytes, "little")
 
 
 def xfp2str(xfp: int) -> str:
