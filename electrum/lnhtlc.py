@@ -3,6 +3,7 @@ from typing import Sequence, Tuple, Dict, TYPE_CHECKING, Set
 
 from .lnutil import SENT, RECEIVED, LOCAL, REMOTE, HTLCOwner, UpdateAddHtlc, Direction, FeeUpdate
 from .util import bfh, with_lock
+from electrum.json_db import StoredDict
 
 if TYPE_CHECKING:
     from .json_db import StoredDict
@@ -24,8 +25,10 @@ class HTLCManager:
                 'ctn': -1,               # oldest unrevoked ctx of sub
             }
             # note: "htlc_id" keys in dict are str! but due to json_db magic they can *almost* be treated as int...
-            log[LOCAL] = deepcopy(initial)
-            log[REMOTE] = deepcopy(initial)
+            l_initial = deepcopy(initial)
+            log[LOCAL] = l_initial
+            r_initial = deepcopy(initial)
+            log[REMOTE] = r_initial
             log[LOCAL]['unacked_updates'] = {}
             log[LOCAL]['was_revoke_last'] = False
 
@@ -33,8 +36,9 @@ class HTLCManager:
         if initial_feerate is not None:
             assert type(initial_feerate) is int
             for sub in (LOCAL, REMOTE):
-                if not log[sub]['fee_updates']:
-                    log[sub]['fee_updates'][0] = FeeUpdate(rate=initial_feerate, ctn_local=0, ctn_remote=0)
+                fee_updates = log[sub]['fee_updates']
+                if not fee_updates:
+                    fee_updates[0] = FeeUpdate(rate=initial_feerate, ctn_local=0, ctn_remote=0)
         self.log = log
 
         # We need a lock as many methods of HTLCManager are accessed by both the asyncio thread and the GUI.
@@ -595,27 +599,46 @@ class HTLCManager:
         """Return feerate (sat/kw) used in subject's commitment txn at ctn."""
         ctn = max(0, ctn)  # FIXME rm this
         # only one party can update fees; use length of logs to figure out which:
-        assert not (len(self.log[LOCAL]['fee_updates']) > 1 and len(self.log[REMOTE]['fee_updates']) > 1)
-        fee_log = self.log[LOCAL]['fee_updates']  # type: Sequence[FeeUpdate]
-        if len(self.log[REMOTE]['fee_updates']) > 1:
-            fee_log = self.log[REMOTE]['fee_updates']
+        # assert not (len(self.log[LOCAL]['fee_updates']) > 1 and len(self.log[REMOTE]['fee_updates']) > 1)
+        local_fee_updates = self.log[LOCAL]['fee_updates']
+        remote_fee_updates = self.log[REMOTE]['fee_updates']
+
+        # Optimize: only compute len once
+        n_local = len(local_fee_updates)
+        n_remote = len(remote_fee_updates)
+
+        # Use remote fees if remote updated fees, else local
+        if n_remote > 1:
+            fee_log = remote_fee_updates
+        else:
+            fee_log = local_fee_updates
+
+        # Optimize: Avoid repeated attribute lookup inside loop
+        feerates = fee_log
         # binary search
         left = 0
-        right = len(fee_log)
+        right = len(feerates)
+        # Optimize: loop only if len > 1 (otherwise index 0 is always the result)
+        if right == 1:
+            f = feerates[0]
+            ctn_at_i = f.ctn_local if subject == LOCAL else f.ctn_remote
+            assert ctn_at_i <= ctn
+            return f.rate
+
         while True:
             i = (left + right) // 2
-            ctn_at_i = fee_log[i].ctn_local if subject == LOCAL else fee_log[i].ctn_remote
+            f = feerates[i]
+            ctn_at_i = f.ctn_local if subject == LOCAL else f.ctn_remote
             if right - left <= 1:
                 break
             if ctn_at_i is None:  # Nones can only be on the right end
                 right = i
-                continue
-            if ctn_at_i <= ctn:  # among equals, we want the rightmost
+            elif ctn_at_i <= ctn:  # among equals, we want the rightmost
                 left = i
             else:
                 right = i
         assert ctn_at_i <= ctn
-        return fee_log[i].rate
+        return f.rate
 
     def get_feerate_in_oldest_unrevoked_ctx(self, subject: HTLCOwner) -> int:
         return self.get_feerate(subject=subject, ctn=self.ctn_oldest_unrevoked(subject))
