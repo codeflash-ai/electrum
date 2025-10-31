@@ -3,6 +3,7 @@ from typing import Sequence, Tuple, Dict, TYPE_CHECKING, Set
 
 from .lnutil import SENT, RECEIVED, LOCAL, REMOTE, HTLCOwner, UpdateAddHtlc, Direction, FeeUpdate
 from .util import bfh, with_lock
+from electrum.json_db import StoredDict
 
 if TYPE_CHECKING:
     from .json_db import StoredDict
@@ -13,7 +14,8 @@ class HTLCManager:
     def __init__(self, log: 'StoredDict', *, initial_feerate=None):
 
         if len(log) == 0:
-            initial = {
+            # Only deepcopy the initial dict once, then assign
+            initial_base = {
                 'adds': {},              # "side who offered htlc" -> htlc_id -> htlc
                 'locked_in': {},         # "side who offered htlc" -> action -> htlc_id -> whose ctx -> ctn
                 'settles': {},           # "side who offered htlc" -> action -> htlc_id -> whose ctx -> ctn
@@ -23,11 +25,15 @@ class HTLCManager:
                 'next_htlc_id': 0,
                 'ctn': -1,               # oldest unrevoked ctx of sub
             }
-            # note: "htlc_id" keys in dict are str! but due to json_db magic they can *almost* be treated as int...
-            log[LOCAL] = deepcopy(initial)
-            log[REMOTE] = deepcopy(initial)
-            log[LOCAL]['unacked_updates'] = {}
-            log[LOCAL]['was_revoke_last'] = False
+            log_local = deepcopy(initial_base)
+            log_remote = deepcopy(initial_base)
+            log[LOCAL] = log_local
+            log[REMOTE] = log_remote
+            # keep single assignment for shallow fields below
+            log_local['unacked_updates'] = {}
+            log_local['was_revoke_last'] = False
+
+        # maybe bootstrap fee_updates if initial_feerate was provided
 
         # maybe bootstrap fee_updates if initial_feerate was provided
         if initial_feerate is not None:
