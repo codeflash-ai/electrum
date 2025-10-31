@@ -3,6 +3,7 @@ from typing import Sequence, Tuple, Dict, TYPE_CHECKING, Set
 
 from .lnutil import SENT, RECEIVED, LOCAL, REMOTE, HTLCOwner, UpdateAddHtlc, Direction, FeeUpdate
 from .util import bfh, with_lock
+from electrum.json_db import StoredDict
 
 if TYPE_CHECKING:
     from .json_db import StoredDict
@@ -78,11 +79,11 @@ class HTLCManager:
     @with_lock
     def send_htlc(self, htlc: UpdateAddHtlc) -> UpdateAddHtlc:
         htlc_id = htlc.htlc_id
-        if htlc_id != self.get_next_htlc_id(LOCAL):
+        if htlc_id != self.log[LOCAL]['next_htlc_id']:
             raise Exception(f"unexpected local htlc_id. next should be "
-                            f"{self.get_next_htlc_id(LOCAL)} but got {htlc_id}")
+                            f"{self.log[LOCAL]['next_htlc_id']} but got {htlc_id}")
         self.log[LOCAL]['adds'][htlc_id] = htlc
-        self.log[LOCAL]['locked_in'][htlc_id] = {LOCAL: None, REMOTE: self.ctn_latest(REMOTE)+1}
+        self.log[LOCAL]['locked_in'][htlc_id] = {LOCAL: None, REMOTE: self.ctn_oldest_unrevoked(REMOTE) + int(self.is_revack_pending(REMOTE)) + 1}
         self.log[LOCAL]['next_htlc_id'] += 1
         self._maybe_active_htlc_ids[LOCAL].add(htlc_id)
         return htlc
