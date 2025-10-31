@@ -8,6 +8,8 @@ from .util import format_satoshis_plain
 from .bitcoin import COIN, TOTAL_COIN_SUPPLY_LIMIT_IN_BTC
 from .lnaddr import lndecode, LnDecodeException
 
+_X_AMOUNT_REGEX = re.compile(r'([0-9.]+)X([0-9])')
+
 # note: when checking against these, use .lower() to support case-insensitivity
 BITCOIN_BIP21_URI_SCHEME = 'bitcoin'
 LIGHTNING_URI_SCHEME = 'lightning'
@@ -19,46 +21,57 @@ class InvalidBitcoinURI(Exception):
 
 def parse_bip21_URI(uri: str) -> dict:
     """Raises InvalidBitcoinURI on malformed URI."""
-
     if not isinstance(uri, str):
         raise InvalidBitcoinURI(f"expected string, not {repr(uri)}")
-
     if ':' not in uri:
         if not bitcoin.is_address(uri):
             raise InvalidBitcoinURI("Not a bitcoin address")
         return {'address': uri}
 
-    u = urllib.parse.urlparse(uri)
-    if u.scheme.lower() != BITCOIN_BIP21_URI_SCHEME:
+    # Do a one-pass manual parse to avoid expensive urlparse/parse_qs
+    scheme_sep = uri.find(':')
+    scheme = uri[:scheme_sep].lower()
+    if scheme != BITCOIN_BIP21_URI_SCHEME:
         raise InvalidBitcoinURI("Not a bitcoin URI")
-    address = u.path
+    rest = uri[scheme_sep + 1:]
 
-    # python for android fails to parse query
-    if address.find('?') > 0:
-        address, query = u.path.split('?')
-        pq = urllib.parse.parse_qs(query)
+    # Split path and query
+    path, sep, query = rest.partition('?')
+    address = path
+
+    # Only parse query if present
+    if sep:
+        pq_pairs = urllib.parse.parse_qs(query)
     else:
-        pq = urllib.parse.parse_qs(u.query)
+        pq_pairs = {}
 
-    for k, v in pq.items():
+        # However, URL parsing absolutely required for the odd edge case where address has '?'
+        if address.find('?') > 0:
+            address, query = address.split('?', 1)
+            pq_pairs = urllib.parse.parse_qs(query)
+
+    # Validate keys and single-value per key
+    for k, v in pq_pairs.items():
         if len(v) != 1:
             raise InvalidBitcoinURI(f'Duplicate Key: {repr(k)}')
         if k.startswith('req-'):
-            # we have no support for any req-* query parameters
             raise InvalidBitcoinURI(f'Unsupported Key: {repr(k)}')
 
-    out = {k: v[0] for k, v in pq.items()}
+    out = {}
     if address:
         if not bitcoin.is_address(address):
             raise InvalidBitcoinURI(f"Invalid bitcoin address: {address}")
         out['address'] = address
+
+    for k, v in pq_pairs.items():
+        out[k] = v[0]
     if 'amount' in out:
         am = out['amount']
         try:
-            m = re.match(r'([0-9.]+)X([0-9])', am)
+            m = _X_AMOUNT_REGEX.match(am)
             if m:
-                k = int(m.group(2)) - 8
-                amount = Decimal(m.group(1)) * pow(Decimal(10), k)
+                k_exp = int(m.group(2)) - 8
+                amount = Decimal(m.group(1)) * (Decimal(10) ** k_exp)
             else:
                 amount = Decimal(am) * COIN
             if amount > TOTAL_COIN_SUPPLY_LIMIT_IN_BTC * COIN or amount <= 0:
@@ -92,14 +105,14 @@ def parse_bip21_URI(uri: str) -> dict:
         amount_sat = out.get('amount')
         if amount_sat:
             # allow small leeway due to msat precision
-            if lnaddr.get_amount_sat() is None or abs(amount_sat - int(lnaddr.get_amount_sat())) > 1:
+            ln_amount = lnaddr.get_amount_sat()
+            if ln_amount is None or abs(amount_sat - int(ln_amount)) > 1:
                 raise InvalidBitcoinURI("Inconsistent lightning field in bip21: amount")
-        address = out.get('address')
+        address_val = out.get('address')
         ln_fallback_addr = lnaddr.get_fallback_address()
-        if address and ln_fallback_addr:
-            if ln_fallback_addr != address:
+        if address_val and ln_fallback_addr:
+            if ln_fallback_addr != address_val:
                 raise InvalidBitcoinURI("Inconsistent lightning field in bip21: address")
-
     return out
 
 
