@@ -312,9 +312,9 @@ class HardwareHandlerBase:
     device: str
 
     def get_wallet(self) -> Optional['Abstract_Wallet']:
-        if self.win is not None:
-            if hasattr(self.win, 'wallet'):
-                return self.win.wallet
+        win = self.win
+        if win is not None:
+            return getattr(win, 'wallet', None)
 
     def get_gui_thread(self) -> Optional['threading.Thread']:
         if self.win is not None:
