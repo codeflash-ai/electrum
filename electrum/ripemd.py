@@ -38,6 +38,7 @@
 ## */
 
 #block_size = 1
+
 digest_size = 20
 digestsize = 20
 
@@ -76,8 +77,14 @@ class RIPEMD160:
 
     def copy(self):
         """copy()"""
-        import copy
-        return copy.deepcopy(self)
+        result = self.__class__.__new__(self.__class__)
+        try:
+            result.ctx = self.ctx.copy()
+        except AttributeError:
+            import copy
+            result.ctx = copy.deepcopy(self.ctx)
+        result.dig = self.dig
+        return result
 
 
 
