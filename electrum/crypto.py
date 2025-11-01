@@ -89,19 +89,26 @@ if not (HAS_CRYPTODOME or HAS_CRYPTOGRAPHY):
 def version_info() -> Mapping[str, Optional[str]]:
     ret = {}
     if HAS_PYAES:
-        ret["pyaes.version"] = ".".join(map(str, pyaes.VERSION[:3]))
+        ver = pyaes.VERSION
+        # Direct indexing and str concatenation is slightly faster
+        ret["pyaes.version"] = f"{ver[0]}.{ver[1]}.{ver[2]}"
     else:
         ret["pyaes.version"] = None
     if HAS_CRYPTODOME:
         ret["cryptodome.version"] = Cryptodome.__version__
-        if hasattr(Cryptodome, "__path__"):
-            ret["cryptodome.path"] = ", ".join(Cryptodome.__path__ or [])
+        # Avoid .join on empty sequences and hasattr lookups for non-existent paths
+        # Also, using getattr with default is faster than hasattr then getattr
+        path = getattr(Cryptodome, "__path__", None)
+        if path:
+            # .join expects iterable of strings; defensive against None
+            ret["cryptodome.path"] = ", ".join(path)
     else:
         ret["cryptodome.version"] = None
     if HAS_CRYPTOGRAPHY:
         ret["cryptography.version"] = cryptography.__version__
-        if hasattr(cryptography, "__path__"):
-            ret["cryptography.path"] = ", ".join(cryptography.__path__ or [])
+        path = getattr(cryptography, "__path__", None)
+        if path:
+            ret["cryptography.path"] = ", ".join(path)
     else:
         ret["cryptography.version"] = None
     return ret
