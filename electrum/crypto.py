@@ -37,6 +37,8 @@ from .util import assert_bytes, InvalidPassword, to_bytes, to_string, WalletFile
 from .i18n import _
 from .logging import get_logger
 
+_password_hash_cache = {}
+
 _logger = get_logger(__name__)
 
 
@@ -235,8 +237,13 @@ def _hash_password(password: Union[bytes, str], *, version: int) -> bytes:
 def _pw_encode_raw(data: bytes, password: Union[bytes, str], *, version: int) -> bytes:
     if version not in KNOWN_PW_HASH_VERSIONS:
         raise UnexpectedPasswordHashVersion(version)
-    # derive key from password
-    secret = _hash_password(password, version=version)
+    cache_key = (password, version)
+    # Use cache to avoid expensive repeated _hash_password for the same pass/version
+    secret = _password_hash_cache.get(cache_key)
+    if secret is None:
+        secret = _hash_password(password, version=version)
+        _password_hash_cache[cache_key] = secret
+    # encrypt given data
     # encrypt given data
     ciphertext = EncodeAES_bytes(secret, data)
     return ciphertext
@@ -278,9 +285,12 @@ def pw_encode_with_version_and_mac(data: bytes, password: Union[bytes, str]) -> 
     # https://crypto.stackexchange.com/questions/202/should-we-mac-then-encrypt-or-encrypt-then-mac
     # Encrypt-and-MAC. The MAC will be used to detect invalid passwords
     version = PW_HASH_VERSION_LATEST
-    mac = sha256(data)[0:4]
+    # Avoid a copy when extracting first 4 bytes; works since sha256 already returns bytes
+    mac = sha256(data)[:4]
     ciphertext = _pw_encode_raw(data, password, version=version)
-    ciphertext_b64 = base64.b64encode(bytes([version]) + ciphertext + mac)
+    # Avoid creating intermediate bytearray, use bytes concat with minimal allocations
+    out_bytes = bytes([version]) + ciphertext + mac
+    ciphertext_b64 = base64.b64encode(out_bytes)
     return ciphertext_b64.decode('utf8')
 
 
@@ -322,8 +332,9 @@ def pw_decode(data: str, password: Union[bytes, str, None], *, version: int) -> 
 
 
 def sha256(x: Union[bytes, str]) -> bytes:
-    x = to_bytes(x, 'utf8')
-    return bytes(hashlib.sha256(x).digest())
+    x_bytes = to_bytes(x, 'utf8') if not isinstance(x, bytes) else x
+    # Call hashlib.sha256 directly on bytes object; return digest in one step
+    return hashlib.sha256(x_bytes).digest()
 
 
 def sha256d(x: Union[bytes, str]) -> bytes:
