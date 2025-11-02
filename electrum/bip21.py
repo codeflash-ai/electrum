@@ -119,12 +119,11 @@ def create_bip21_uri(addr, amount_sat: Optional[int], message: Optional[str],
             raise Exception(f"illegal key for URI: {repr(k)}")
         v = urllib.parse.quote(v)
         query.append(f"{k}={v}")
-    p = urllib.parse.ParseResult(
-        scheme=BITCOIN_BIP21_URI_SCHEME,
-        netloc='',
-        path=addr,
-        params='',
-        query='&'.join(query),
-        fragment=''
-    )
-    return str(urllib.parse.urlunparse(p))
+    return urllib.parse.urlunparse((
+        BITCOIN_BIP21_URI_SCHEME,
+        '',
+        addr,
+        '',
+        '&'.join(query),
+        ''
+    ))
