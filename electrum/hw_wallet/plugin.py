@@ -317,9 +317,10 @@ class HardwareHandlerBase:
                 return self.win.wallet
 
     def get_gui_thread(self) -> Optional['threading.Thread']:
-        if self.win is not None:
-            if hasattr(self.win, 'gui_thread'):
-                return self.win.gui_thread
+        win = self.win
+        if win is not None:
+            # Use getattr with default to avoid exception overhead
+            return getattr(win, "gui_thread", None)
 
     def update_status(self, paired: bool) -> None:
         pass
