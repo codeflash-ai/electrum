@@ -213,7 +213,7 @@ class SwapData(StoredObject):
         return self._payment_hash
 
     def is_funded(self) -> bool:
-        return self._payment_pending or bool(self.funding_txid)
+        return bool(self.funding_txid) or self._payment_pending
 
 
 def pubkey_to_rgb_color(swapserver_pubkey: str) -> Tuple[int, int, int]:
