@@ -45,16 +45,27 @@ PR_SET_DUMPABLE = 4
 
 
 _libc = None  # type: Optional[ctypes.CDLL]
+
+
 def _load_libc():
     global _libc
     if _libc is not None:
         return
-    #assert sys.platform == "linux", sys.platform
+    # assert sys.platform == "linux", sys.platform
     # note: find_library can raise FileNotFoundError(OSError), see https://github.com/python/cpython/issues/93094
     _libc_path = ctypes.util.find_library("c")
-    _libc = ctypes.CDLL(_libc_path, use_errno=True)
-    _libc.prctl.argtypes = (ctypes.c_int, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong)
-    _libc.prctl.restype = ctypes.c_int
+    # Cache prctl function and argtypes locally to avoid attribute lookups on repeated usage
+    libc = ctypes.CDLL(_libc_path, use_errno=True)
+    prctl = libc.prctl
+    prctl.argtypes = (
+        ctypes.c_int,
+        ctypes.c_ulong,
+        ctypes.c_ulong,
+        ctypes.c_ulong,
+        ctypes.c_ulong,
+    )
+    prctl.restype = ctypes.c_int
+    _libc = libc
 
 
 def set_dumpable(flag: bool) -> None:
