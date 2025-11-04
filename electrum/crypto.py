@@ -322,8 +322,11 @@ def pw_decode(data: str, password: Union[bytes, str, None], *, version: int) -> 
 
 
 def sha256(x: Union[bytes, str]) -> bytes:
-    x = to_bytes(x, 'utf8')
-    return bytes(hashlib.sha256(x).digest())
+    if isinstance(x, (bytes, bytearray)):
+        # Avoid unnecessary conversion, avoid extra allocation/encoding
+        return hashlib.sha256(x).digest()
+    # fallback for str or other types via to_bytes (preserves all original behaviors and exceptions)
+    return hashlib.sha256(to_bytes(x, 'utf8')).digest()
 
 
 def sha256d(x: Union[bytes, str]) -> bytes:
