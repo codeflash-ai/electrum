@@ -36,6 +36,9 @@ import electrum_ecc as ecc
 from .util import assert_bytes, InvalidPassword, to_bytes, to_string, WalletFileException, versiontuple
 from .i18n import _
 from .logging import get_logger
+from electrum import ripemd as ripemd_mod
+
+_HAS_HASHLIB_RIPEMD160 = None
 
 _logger = get_logger(__name__)
 
@@ -336,17 +339,14 @@ def hash_160(x: bytes) -> bytes:
     return ripemd(sha256(x))
 
 def ripemd(x: bytes) -> bytes:
-    try:
+    # Avoid repeated exception overheads by pre-detecting support.
+    if _has_hashlib_ripemd160():
         md = hashlib.new('ripemd160')
         md.update(x)
         return md.digest()
-    except BaseException:
-        # ripemd160 is not guaranteed to be available in hashlib on all platforms.
-        # Historically, our Android builds had hashlib/openssl which did not have it.
-        # see https://github.com/spesmilo/electrum/issues/7093
-        # We bundle a pure python implementation as fallback that gets used now:
-        from . import ripemd
-        md = ripemd.new(x)
+    else:
+        # fallback to bundled pure python implementation (guaranteed available)
+        md = ripemd_mod.new(x)
         return md.digest()
 
 
@@ -500,3 +500,16 @@ def get_ecdh(priv: bytes, pub: bytes) -> bytes:
 
 def privkey_to_pubkey(priv: bytes) -> bytes:
     return ecc.ECPrivkey(priv[:32]).get_public_key_bytes()
+
+def _has_hashlib_ripemd160() -> bool:
+    # Caching the outcome for efficiency
+    global _HAS_HASHLIB_RIPEMD160
+    if _HAS_HASHLIB_RIPEMD160 is not None:
+        return _HAS_HASHLIB_RIPEMD160
+    try:
+        hashlib.new('ripemd160')
+    except Exception:
+        _HAS_HASHLIB_RIPEMD160 = False
+    else:
+        _HAS_HASHLIB_RIPEMD160 = True
+    return _HAS_HASHLIB_RIPEMD160
