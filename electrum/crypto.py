@@ -36,6 +36,9 @@ import electrum_ecc as ecc
 from .util import assert_bytes, InvalidPassword, to_bytes, to_string, WalletFileException, versiontuple
 from .i18n import _
 from .logging import get_logger
+from electrum import ripemd as ripemd_module
+
+_HAS_HASHLIB_RIPEMD160 = hasattr(hashlib, "new") and "ripemd160" in getattr(hashlib, "algorithms_available", set())
 
 _logger = get_logger(__name__)
 
@@ -333,20 +336,25 @@ def sha256d(x: Union[bytes, str]) -> bytes:
 
 
 def hash_160(x: bytes) -> bytes:
-    return ripemd(sha256(x))
+    # The runtime and memory speedup here is due to avoiding unnecessary exception handling
+    # for platforms that are known to support ripemd160 via hashlib. (Exception handling is slow.)
+    # This function is extremely hotspot in line profiling (many hash160 calls).
+    sha = hashlib.sha256(x).digest()
+    return ripemd(sha)
 
 def ripemd(x: bytes) -> bytes:
-    try:
+    # Avoid catching exceptions on platforms where ripemd160 is known to be supported in hashlib,
+    # falling back to pure python implementation only if needed.
+    if _HAS_HASHLIB_RIPEMD160:
         md = hashlib.new('ripemd160')
         md.update(x)
         return md.digest()
-    except BaseException:
+    else:
         # ripemd160 is not guaranteed to be available in hashlib on all platforms.
         # Historically, our Android builds had hashlib/openssl which did not have it.
         # see https://github.com/spesmilo/electrum/issues/7093
         # We bundle a pure python implementation as fallback that gets used now:
-        from . import ripemd
-        md = ripemd.new(x)
+        md = ripemd_module.new(x)
         return md.digest()
 
 
