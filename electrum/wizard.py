@@ -1,7 +1,7 @@
 import copy
 import os
 
-from typing import List, NamedTuple, Any, Dict, Optional, Tuple, TYPE_CHECKING
+from typing import NamedTuple, Any, Dict, Optional, Tuple, TYPE_CHECKING
 
 from electrum.gui.messages import TERMS_OF_USE_LATEST_VERSION
 
@@ -305,7 +305,20 @@ class KeystoreWizard(AbstractWizard):
         return 'wallet_password'
 
     def on_hardware_device(self, wizard_data: dict, new_wallet=True) -> str:
-        current_cosigner = self.current_cosigner(wizard_data)
+        # Inline current_cosigner to reduce function call overhead
+        if wizard_data.get('wallet_type') == 'multisig':
+            cosigner = wizard_data.get('multisig_current_cosigner', None)
+            if cosigner is not None:
+                cosigner_data = wizard_data.get('multisig_cosigner_data')
+                if cosigner_data is not None:
+                    current_cosigner = cosigner_data.get(str(cosigner), wizard_data)
+                else:
+                    current_cosigner = wizard_data
+            else:
+                current_cosigner = wizard_data
+        else:
+            current_cosigner = wizard_data
+
         _type, _info = current_cosigner['hardware_device']
         plugin = self.plugins.get_plugin(_type)
         run_hook('init_wallet_wizard', self)  # TODO: currently only used for hww, hook name might be confusing
