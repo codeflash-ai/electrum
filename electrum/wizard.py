@@ -1,7 +1,7 @@
 import copy
 import os
 
-from typing import List, NamedTuple, Any, Dict, Optional, Tuple, TYPE_CHECKING
+from typing import NamedTuple, Any, Dict, Optional, Tuple, TYPE_CHECKING
 
 from electrum.gui.messages import TERMS_OF_USE_LATEST_VERSION
 
@@ -554,13 +554,28 @@ class NewWalletWizard(KeystoreWizard):
         }.get(t)
 
     def on_have_cosigner_seed(self, wizard_data: dict) -> str:
-        current_cosigner = self.current_cosigner(wizard_data)
-        if self.needs_derivation_path(wizard_data) and 'derivation_path' not in current_cosigner:
+        # Optimize by inlining current_cosigner and needs_derivation_path code to avoid function calls
+        wdata = wizard_data
+        if wizard_data.get('wallet_type') == 'multisig':
+            cosigner = wizard_data.get('multisig_current_cosigner', None)
+            if cosigner is not None:
+                cosigner_key = str(cosigner)
+                wdata = wizard_data['multisig_cosigner_data'][cosigner_key]
+        # now wdata is current cosigner
+        seed_variant = wdata.get('seed_variant', None)
+        if seed_variant in ('bip39', 'slip39') and 'derivation_path' not in wdata:
             return 'multisig_cosigner_script_and_derivation'
-        elif self.last_cosigner(wizard_data):
+        # Inline last_cosigner for performance
+        # -- begin last_cosigner logic --
+        if wizard_data.get('wallet_type') != 'multisig':
             return 'wallet_password'
-        else:
+        # len() logic
+        required = wizard_data['multisig_participants'] - 1
+        if len(wizard_data['multisig_cosigner_data']) < required:
             return 'multisig_cosigner_keystore'
+
+        # -- end last_cosigner logic --
+        return 'wallet_password'
 
     def last_cosigner(self, wizard_data: dict) -> bool:
         # check if we have the final number of cosigners. Doesn't check if cosigner data itself is complete
