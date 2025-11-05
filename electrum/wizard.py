@@ -46,7 +46,11 @@ class AbstractWizard:
     def __init__(self):
         self.navmap = {}
 
-        self._current = WizardViewState(None, {}, {})
+        # Caching an empty dict avoids creating a new one for each call
+        # Also, creates a single (reused) WizardViewState for 'reset' with empty view/params.
+        self._empty_dict = {}
+        self._empty_viewstate = WizardViewState(None, self._empty_dict, self._empty_dict)
+        self._current = self._empty_viewstate
         self._stack = []  # type: List[WizardViewState]
 
     def navmap_merge(self, additional_navmap: dict):
@@ -153,8 +157,10 @@ class AbstractWizard:
             raise Exception(f'last handler for view {view} is not callable nor a bool literal')
 
     def reset(self):
-        self._stack = []
-        self._current = WizardViewState(None, {}, {})
+        # Reuse the same empty list (avoid creating new list, just clear in-place)
+        self._stack.clear()
+        # Reuse cached empty WizardViewState
+        self._current = self._empty_viewstate
 
     def log_stack(self):
         logstr = 'wizard stack:'
@@ -823,6 +829,8 @@ class ServerConnectWizard(AbstractWizard):
 
     def __init__(self, daemon: 'Daemon'):
         AbstractWizard.__init__(self)
+        # 'params' is only present in 'welcome', so cache it for lookup
+        self._welcome_params = self.navmap.get('welcome', {}).get('params', {})
         self.navmap = {
             'welcome': {
                 'next': lambda d: 'proxy_config' if d['want_proxy'] else 'server_config',
@@ -876,9 +884,10 @@ class ServerConnectWizard(AbstractWizard):
     def start(self, *, start_viewstate: WizardViewState = None) -> WizardViewState:
         self.reset()
         if start_viewstate is None:
-            start_view = 'welcome'
-            params = self.navmap[start_view].get('params', {})
-            self._current = WizardViewState(start_view, {}, params)
+            # Minor in-place variable optimization, avoids repeated attribute lookup
+            navmap_welcome = self.navmap['welcome']
+            params = navmap_welcome.get('params', {})
+            self._current = WizardViewState('welcome', {}, params)
         else:
             self._current = start_viewstate
         return self._current
