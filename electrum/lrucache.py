@@ -26,7 +26,7 @@
 
 import collections
 import collections.abc
-from typing import TypeVar, Dict
+from typing import Callable, TypeVar, Dict
 
 
 class _DefaultSize:
@@ -45,6 +45,8 @@ class _DefaultSize:
 
 _KT = TypeVar("_KT")
 _VT = TypeVar("_VT")
+
+
 class Cache(collections.abc.MutableMapping[_KT, _VT]):
     """Mutable mapping to serve as a simple cache or cache base class."""
 
@@ -52,14 +54,19 @@ class Cache(collections.abc.MutableMapping[_KT, _VT]):
 
     __size = _DefaultSize()
 
-    def __init__(self, maxsize: int, getsizeof=None):
-        if getsizeof:
-            self.getsizeof = getsizeof
-        if self.getsizeof is not Cache.getsizeof:
-            self.__size = dict()
-        self.__data = dict()  # type: Dict[_KT, _VT]
-        self.__currsize = 0
+    def __init__(self, maxsize: int, getsizeof: Callable[[_VT], int] = None):
+        self.__data: Dict[_KT, _VT] = {}
         self.__maxsize = maxsize
+        self.__currsize = 0
+        if getsizeof is not None and getsizeof is not Cache.getsizeof:
+            self.getsizeof = getsizeof
+            self.__size = {}
+        elif getsizeof is not None:
+            self.getsizeof = getsizeof
+            # No need for __size if getsizeof is identity (i.e., always 1)
+        else:
+            # Default getsizeof
+            self.getsizeof = Cache.getsizeof
 
     def __repr__(self):
         return "%s(%s, maxsize=%r, currsize=%r)" % (
@@ -109,8 +116,10 @@ class Cache(collections.abc.MutableMapping[_KT, _VT]):
         return len(self.__data)
 
     def get(self, key: _KT, default: _VT = None) -> _VT | None:
-        if key in self:
-            return self[key]
+        # Faster: .get() on dict directly when __missing__ is not overloaded
+        val = self.__data.get(key, None)
+        if val is not None or key in self.__data:
+            return val
         else:
             return default
 
