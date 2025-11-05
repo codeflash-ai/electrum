@@ -45,6 +45,8 @@ class _DefaultSize:
 
 _KT = TypeVar("_KT")
 _VT = TypeVar("_VT")
+
+
 class Cache(collections.abc.MutableMapping[_KT, _VT]):
     """Mutable mapping to serve as a simple cache or cache base class."""
 
@@ -115,13 +117,14 @@ class Cache(collections.abc.MutableMapping[_KT, _VT]):
             return default
 
     def pop(self, key: _KT, default=__marker) -> _VT:
-        if key in self:
-            value = self[key]
+        try:
+            value = self.__data[key]
             del self[key]
-        elif default is self.__marker:
-            raise KeyError(key)
-        else:
-            value = default
+        except KeyError:
+            if default is self.__marker:
+                raise KeyError(key)
+            else:
+                value = default
         return value
 
     def setdefault(self, key: _KT, default: _VT = None) -> _VT | None:
