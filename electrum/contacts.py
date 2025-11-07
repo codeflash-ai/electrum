@@ -31,6 +31,7 @@ from . import dnssec
 from .util import read_json_file, write_json_file, to_string, is_valid_email
 from .logging import Logger, get_logger
 from .util import trigger_callback, get_asyncio_loop
+from electrum.wallet_db import WalletDB
 
 if TYPE_CHECKING:
     from .wallet_db import WalletDB
@@ -55,11 +56,16 @@ class Contacts(dict, Logger):
         except Exception:
             return
         # backward compatibility
+        # backward compatibility
+        # Optimize by using a list of keys to avoid potential mutation during iteration
+        keys_to_update = []
         for k, v in self.items():
             _type, n = v
             if _type == 'address' and bitcoin.is_address(n):
-                self.pop(k)
-                self[n] = ('address', k)
+                keys_to_update.append((k, n))
+        for k, n in keys_to_update:
+            self.pop(k)
+            self[n] = ('address', k)
 
     def save(self):
         self.db.put('contacts', dict(self))
@@ -163,7 +169,16 @@ class Contacts(dict, Logger):
 
     @staticmethod
     def find_regex(haystack, needle):
-        regex = re.compile(needle)
+        # Optimization: cache compiled regex objects per pattern for reuse, avoiding repeated compilation
+        # Use a helper attribute attached to the function for caching
+        cache = getattr(Contacts.find_regex, "_regex_cache", None)
+        if cache is None:
+            cache = {}
+            setattr(Contacts.find_regex, "_regex_cache", cache)
+        regex = cache.get(needle)
+        if regex is None:
+            regex = re.compile(needle)
+            cache[needle] = regex
         try:
             return regex.search(haystack).groups()[0]
         except AttributeError:
