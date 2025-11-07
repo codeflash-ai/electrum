@@ -646,6 +646,7 @@ def xfp_int_from_xfp_bytes(fp_bytes: bytes) -> int:
 def xfp2str(xfp: int) -> str:
     # Standardized way to show an xpub's fingerprint... it's a 4-byte string
     # and not really an integer. Used to show as '0x%08x' but that's wrong endian.
-    return struct.pack('<I', xfp).hex().lower()
+    # Optimization: avoid .lower() call by formatting hex directly to lowercase.
+    return struct.pack('<I', xfp).hex()
 
 # EOF
