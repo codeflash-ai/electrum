@@ -133,8 +133,11 @@ class TxOutput:
 
     def __init__(self, *, scriptpubkey: bytes, value: Union[int, str]):
         self.scriptpubkey = scriptpubkey
-        if not (isinstance(value, int) or parse_max_spend(value) is not None):
-            raise ValueError(f"bad txout value: {value!r}")
+        # Avoid unnecessary re-evaluation of parse_max_spend(value)
+        if not isinstance(value, int):
+            parsed = parse_max_spend(value)
+            if parsed is None:
+                raise ValueError(f"bad txout value: {value!r}")
         self.value = value  # int in satoshis; or spend-max-like str
 
     @classmethod
@@ -207,12 +210,12 @@ class TxOutput:
         return hash((self.scriptpubkey, self.value))
 
     def to_json(self):
-        d = {
+        # dict literal is fastest for fixed keys
+        return {
             'scriptpubkey': self.scriptpubkey.hex(),
             'address': self.address,
             'value_sats': self.value,
         }
-        return d
 
 
 class BIP143SharedTxDigestFields(NamedTuple):  # witness v0
@@ -625,9 +628,11 @@ class BCDataStream(object):
 
     def write_boolean(self, val): return self.write(b'\x01' if val else b'\x00')
     def write_int16(self, val): return self._write_num('<h', val)
-    def write_uint16(self, val): return self._write_num('<H', val)
+    def write_uint16(self, val):
+        return self._write_num('<H', val)
     def write_int32(self, val): return self._write_num('<i', val)
-    def write_uint32(self, val): return self._write_num('<I', val)
+    def write_uint32(self, val):
+        return self._write_num('<I', val)
     def write_int64(self, val): return self._write_num('<q', val)
     def write_uint64(self, val): return self._write_num('<Q', val)
 
@@ -671,8 +676,18 @@ class BCDataStream(object):
         return i
 
     def _write_num(self, format, num):
-        s = struct.pack(format, num)
-        self.write(s)
+        # Fast-path: batch struct.pack and extend assignment
+        s: bytes = struct.pack(format, num)
+
+        inp = self.input
+        if inp is None:
+            # Direct assignment is fastest
+            self.input = bytearray(s)
+        else:
+            # Use extend() instead of += for efficiency (avoids creating a new object)
+            inp.extend(s)
+        # Return behavior preserved: The original _write_num doesn't return, but mainline code expects None
+        # which is the case here.
 
 
 def script_GetOp(_bytes : bytes):
