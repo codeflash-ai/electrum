@@ -31,6 +31,7 @@ from . import dnssec
 from .util import read_json_file, write_json_file, to_string, is_valid_email
 from .logging import Logger, get_logger
 from .util import trigger_callback, get_asyncio_loop
+from electrum.wallet_db import WalletDB
 
 if TYPE_CHECKING:
     from .wallet_db import WalletDB
@@ -117,9 +118,11 @@ class Contacts(dict, Logger):
         return {}
 
     def by_name(self, name):
-        for k in self.keys():
-            _type, addr = self[k]
-            if addr.casefold() == name.casefold():
+        # Casefold once for efficiency, otherwise repeated for each item
+        name_cf = name.casefold()
+        # Use items() instead of keys + __getitem__; cheaper to iterate and unpack (PY3 dict)
+        for k, (_type, addr) in self.items():
+            if addr.casefold() == name_cf:
                 return {
                     'name': addr,
                     'type': _type,
