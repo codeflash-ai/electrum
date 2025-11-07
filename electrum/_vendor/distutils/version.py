@@ -327,7 +327,14 @@ class LooseVersion (Version):
 
 
     def __repr__ (self):
-        return "LooseVersion ('%s')" % str(self)
+        # Fast path: avoid python's slow %-format and str() call
+        # Exploit that __str__ just returns self.vstring for LooseVersion
+        try:
+            s = self.vstring
+        except AttributeError:
+            s = str(self)
+        # This uses f-string, which is faster than % formatting
+        return f"LooseVersion ('{s}')"
 
 
     def _cmp (self, other):
