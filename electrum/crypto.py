@@ -327,9 +327,13 @@ def sha256(x: Union[bytes, str]) -> bytes:
 
 
 def sha256d(x: Union[bytes, str]) -> bytes:
-    x = to_bytes(x, 'utf8')
-    out = bytes(sha256(sha256(x)))
-    return out
+    # Avoid redundant conversion; only convert to bytes if necessary
+    if not isinstance(x, bytes):
+        x = to_bytes(x, 'utf8')
+    # Avoid double-conversion and extra function calls
+    h1 = hashlib.sha256(x).digest()
+    h2 = hashlib.sha256(h1).digest()
+    return h2
 
 
 def hash_160(x: bytes) -> bytes:
