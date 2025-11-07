@@ -625,9 +625,11 @@ class BCDataStream(object):
 
     def write_boolean(self, val): return self.write(b'\x01' if val else b'\x00')
     def write_int16(self, val): return self._write_num('<h', val)
-    def write_uint16(self, val): return self._write_num('<H', val)
+    def write_uint16(self, val):
+        return self._write_num('<H', val)
     def write_int32(self, val): return self._write_num('<i', val)
-    def write_uint32(self, val): return self._write_num('<I', val)
+    def write_uint32(self, val):
+        return self._write_num('<I', val)
     def write_int64(self, val): return self._write_num('<q', val)
     def write_uint64(self, val): return self._write_num('<Q', val)
 
@@ -671,8 +673,18 @@ class BCDataStream(object):
         return i
 
     def _write_num(self, format, num):
-        s = struct.pack(format, num)
-        self.write(s)
+        # Fast-path: batch struct.pack and extend assignment
+        s: bytes = struct.pack(format, num)
+
+        inp = self.input
+        if inp is None:
+            # Direct assignment is fastest
+            self.input = bytearray(s)
+        else:
+            # Use extend() instead of += for efficiency (avoids creating a new object)
+            inp.extend(s)
+        # Return behavior preserved: The original _write_num doesn't return, but mainline code expects None
+        # which is the case here.
 
 
 def script_GetOp(_bytes : bytes):
@@ -2421,10 +2433,16 @@ class PartialTransaction(Transaction):
         delattr(self, '_script_to_output_idx')
 
     def get_change_outputs(self) -> Sequence[PartialTxOutput]:
+        # Use list comprehension as before; no change needed for speed.
+        # This method is only slow if _outputs is large. See has_change for an optimized use-case.
         return [o for o in self._outputs if o.is_change]
 
     def has_change(self) -> bool:
-        return len(self.get_change_outputs()) > 0
+        # Optimization: Avoid creating the full list when only checking existence.
+        for o in self._outputs:
+            if o.is_change:
+                return True
+        return False
 
     def get_dummy_output(self, dummy_addr: str) -> Optional['PartialTxOutput']:
         idxs = self.get_output_idxs_from_address(dummy_addr)
