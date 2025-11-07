@@ -625,9 +625,11 @@ class BCDataStream(object):
 
     def write_boolean(self, val): return self.write(b'\x01' if val else b'\x00')
     def write_int16(self, val): return self._write_num('<h', val)
-    def write_uint16(self, val): return self._write_num('<H', val)
+    def write_uint16(self, val):
+        return self._write_num('<H', val)
     def write_int32(self, val): return self._write_num('<i', val)
-    def write_uint32(self, val): return self._write_num('<I', val)
+    def write_uint32(self, val):
+        return self._write_num('<I', val)
     def write_int64(self, val): return self._write_num('<q', val)
     def write_uint64(self, val): return self._write_num('<Q', val)
 
@@ -671,8 +673,18 @@ class BCDataStream(object):
         return i
 
     def _write_num(self, format, num):
-        s = struct.pack(format, num)
-        self.write(s)
+        # Fast-path: batch struct.pack and extend assignment
+        s: bytes = struct.pack(format, num)
+
+        inp = self.input
+        if inp is None:
+            # Direct assignment is fastest
+            self.input = bytearray(s)
+        else:
+            # Use extend() instead of += for efficiency (avoids creating a new object)
+            inp.extend(s)
+        # Return behavior preserved: The original _write_num doesn't return, but mainline code expects None
+        # which is the case here.
 
 
 def script_GetOp(_bytes : bytes):
@@ -911,7 +923,7 @@ class Transaction:
             self._cached_network_ser = raw.strip() if raw else None
             assert is_hex_str(self._cached_network_ser)
         elif isinstance(raw, (bytes, bytearray)):
-            self._cached_network_ser = raw.hex()
+            self._cached_network_ser = memoryview(raw).hex() if raw else None
         else:
             raise Exception(f"cannot initialize transaction from {raw}")
         self._inputs = None  # type: List[TxInput]
@@ -957,9 +969,12 @@ class Transaction:
         return self._inputs
 
     def outputs(self) -> Sequence[TxOutput]:
-        if self._outputs is None:
+        # Avoid redundant deserialization if _outputs already set.
+        outputs = self._outputs
+        if outputs is None:
             self.deserialize()
-        return self._outputs
+            outputs = self._outputs
+        return outputs
 
     def deserialize(self) -> None:
         if self._cached_network_ser is None:
@@ -1451,6 +1466,7 @@ class Transaction:
         return sum(input_values)
 
     def output_value(self) -> int:
+        # Use sum with generator, avoids creation of intermediate lists.
         return sum(o.value for o in self.outputs())
 
     def get_fee(self) -> Optional[int]:
