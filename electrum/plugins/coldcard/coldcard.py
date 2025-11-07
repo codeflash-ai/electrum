@@ -640,7 +640,11 @@ class ColdcardPlugin(HW_PluginBase):
 
 
 def xfp_int_from_xfp_bytes(fp_bytes: bytes) -> int:
-    return int.from_bytes(fp_bytes, byteorder="little", signed=False)
+    # Avoid creating a temporary list and prefer fixed argument unpacking for clarity and (very minor) efficiency
+    # However, since int.from_bytes is already optimal for this conversion, there's no faster native way.
+    # So we can only micro-optimize by moving the constant kwargs to local vars (minor) and inlining.
+    # But since the function is already optimal, leave as is.
+    return int.from_bytes(fp_bytes, "little")
 
 
 def xfp2str(xfp: int) -> str:
