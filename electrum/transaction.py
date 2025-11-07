@@ -325,7 +325,7 @@ class TxInput:
     _is_coinbase_output: bool
 
     def __init__(self, *,
-                 prevout: TxOutpoint,
+                 prevout: 'TxOutpoint',
                  script_sig: bytes = None,
                  nsequence: int = 0xffffffff - 1,
                  witness: bytes = None,
@@ -449,7 +449,13 @@ class TxInput:
         vds = BCDataStream()
         vds.write(self.witness)
         n = vds.read_compact_size()
-        return list(vds.read_bytes(vds.read_compact_size()) for i in range(n))
+        # OPTIMIZATION: Pre-allocate the result list to avoid list resizing, and avoid repeated attribute access
+        result = [None] * n
+        read_bytes = vds.read_bytes
+        read_compact_size = vds.read_compact_size
+        for i in range(n):
+            result[i] = read_bytes(read_compact_size())
+        return result
 
     def is_segwit(self, *, guess_for_address=False) -> bool:
         if self.witness not in (b'\x00', b'', None):
@@ -625,9 +631,11 @@ class BCDataStream(object):
 
     def write_boolean(self, val): return self.write(b'\x01' if val else b'\x00')
     def write_int16(self, val): return self._write_num('<h', val)
-    def write_uint16(self, val): return self._write_num('<H', val)
+    def write_uint16(self, val):
+        return self._write_num('<H', val)
     def write_int32(self, val): return self._write_num('<i', val)
-    def write_uint32(self, val): return self._write_num('<I', val)
+    def write_uint32(self, val):
+        return self._write_num('<I', val)
     def write_int64(self, val): return self._write_num('<q', val)
     def write_uint64(self, val): return self._write_num('<Q', val)
 
@@ -671,8 +679,18 @@ class BCDataStream(object):
         return i
 
     def _write_num(self, format, num):
-        s = struct.pack(format, num)
-        self.write(s)
+        # Fast-path: batch struct.pack and extend assignment
+        s: bytes = struct.pack(format, num)
+
+        inp = self.input
+        if inp is None:
+            # Direct assignment is fastest
+            self.input = bytearray(s)
+        else:
+            # Use extend() instead of += for efficiency (avoids creating a new object)
+            inp.extend(s)
+        # Return behavior preserved: The original _write_num doesn't return, but mainline code expects None
+        # which is the case here.
 
 
 def script_GetOp(_bytes : bytes):
