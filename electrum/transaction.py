@@ -616,7 +616,13 @@ class BCDataStream(object):
         return self.read_cursor < len(self.input)
 
     def read_boolean(self) -> bool: return self.read_bytes(1) != b'\x00'
-    def read_int16(self): return self._read_num('<h')
+    def read_int16(self):
+        try:
+            (i,) = struct.unpack_from('<h', self.input, self.read_cursor)
+            self.read_cursor += 2
+        except Exception as e:
+            raise SerializationError(e) from e
+        return i
     def read_uint16(self): return self._read_num('<H')
     def read_int32(self): return self._read_num('<i')
     def read_uint32(self): return self._read_num('<I')
@@ -625,9 +631,11 @@ class BCDataStream(object):
 
     def write_boolean(self, val): return self.write(b'\x01' if val else b'\x00')
     def write_int16(self, val): return self._write_num('<h', val)
-    def write_uint16(self, val): return self._write_num('<H', val)
+    def write_uint16(self, val):
+        return self._write_num('<H', val)
     def write_int32(self, val): return self._write_num('<i', val)
-    def write_uint32(self, val): return self._write_num('<I', val)
+    def write_uint32(self, val):
+        return self._write_num('<I', val)
     def write_int64(self, val): return self._write_num('<q', val)
     def write_uint64(self, val): return self._write_num('<Q', val)
 
@@ -671,8 +679,18 @@ class BCDataStream(object):
         return i
 
     def _write_num(self, format, num):
-        s = struct.pack(format, num)
-        self.write(s)
+        # Fast-path: batch struct.pack and extend assignment
+        s: bytes = struct.pack(format, num)
+
+        inp = self.input
+        if inp is None:
+            # Direct assignment is fastest
+            self.input = bytearray(s)
+        else:
+            # Use extend() instead of += for efficiency (avoids creating a new object)
+            inp.extend(s)
+        # Return behavior preserved: The original _write_num doesn't return, but mainline code expects None
+        # which is the case here.
 
 
 def script_GetOp(_bytes : bytes):
