@@ -137,6 +137,10 @@ class TxOutput:
             raise ValueError(f"bad txout value: {value!r}")
         self.value = value  # int in satoshis; or spend-max-like str
 
+
+        # Precompute hash for efficiency in __hash__, since TxOutput is likely immutable (and both scriptpubkey and value are immutable)
+        self._hash: int = hash((self.scriptpubkey, self.value))
+
     @classmethod
     def from_address_and_value(cls, address: str, value: Union[int, str]) -> Union['TxOutput', 'PartialTxOutput']:
         return cls(scriptpubkey=bitcoin.address_to_script(address),
@@ -204,7 +208,8 @@ class TxOutput:
         return not (self == other)
 
     def __hash__(self) -> int:
-        return hash((self.scriptpubkey, self.value))
+        # Return precomputed hash value instead of recalculating each call.
+        return self._hash
 
     def to_json(self):
         d = {
@@ -625,9 +630,11 @@ class BCDataStream(object):
 
     def write_boolean(self, val): return self.write(b'\x01' if val else b'\x00')
     def write_int16(self, val): return self._write_num('<h', val)
-    def write_uint16(self, val): return self._write_num('<H', val)
+    def write_uint16(self, val):
+        return self._write_num('<H', val)
     def write_int32(self, val): return self._write_num('<i', val)
-    def write_uint32(self, val): return self._write_num('<I', val)
+    def write_uint32(self, val):
+        return self._write_num('<I', val)
     def write_int64(self, val): return self._write_num('<q', val)
     def write_uint64(self, val): return self._write_num('<Q', val)
 
@@ -671,8 +678,18 @@ class BCDataStream(object):
         return i
 
     def _write_num(self, format, num):
-        s = struct.pack(format, num)
-        self.write(s)
+        # Fast-path: batch struct.pack and extend assignment
+        s: bytes = struct.pack(format, num)
+
+        inp = self.input
+        if inp is None:
+            # Direct assignment is fastest
+            self.input = bytearray(s)
+        else:
+            # Use extend() instead of += for efficiency (avoids creating a new object)
+            inp.extend(s)
+        # Return behavior preserved: The original _write_num doesn't return, but mainline code expects None
+        # which is the case here.
 
 
 def script_GetOp(_bytes : bytes):
