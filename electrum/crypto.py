@@ -88,22 +88,36 @@ if not (HAS_CRYPTODOME or HAS_CRYPTOGRAPHY):
 
 def version_info() -> Mapping[str, Optional[str]]:
     ret = {}
-    if HAS_PYAES:
-        ret["pyaes.version"] = ".".join(map(str, pyaes.VERSION[:3]))
+    # Use local variable lookups for attribute accesses to minimize attribute lookup overhead
+    hp = HAS_PYAES
+    hc = HAS_CRYPTODOME
+    hy = HAS_CRYPTOGRAPHY
+
+    if hp:
+        # Version is always 3-tuple; join directly
+        v = pyaes.VERSION
+        ret["pyaes.version"] = f"{v[0]}.{v[1]}.{v[2]}"
     else:
         ret["pyaes.version"] = None
-    if HAS_CRYPTODOME:
+
+    if hc:
         ret["cryptodome.version"] = Cryptodome.__version__
-        if hasattr(Cryptodome, "__path__"):
-            ret["cryptodome.path"] = ", ".join(Cryptodome.__path__ or [])
+        # Use getattr with None default and pre-check for None to avoid unnecessary hasattr and call overhead
+        cryptodome_path = getattr(Cryptodome, "__path__", None)
+        if cryptodome_path:
+            # Use join directly; sequence is already iterable
+            ret["cryptodome.path"] = ", ".join(cryptodome_path)
     else:
         ret["cryptodome.version"] = None
-    if HAS_CRYPTOGRAPHY:
+
+    if hy:
         ret["cryptography.version"] = cryptography.__version__
-        if hasattr(cryptography, "__path__"):
-            ret["cryptography.path"] = ", ".join(cryptography.__path__ or [])
+        cryptography_path = getattr(cryptography, "__path__", None)
+        if cryptography_path:
+            ret["cryptography.path"] = ", ".join(cryptography_path)
     else:
         ret["cryptography.version"] = None
+
     return ret
 
 
