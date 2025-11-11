@@ -344,11 +344,11 @@ def get_logfile_path() -> Optional[pathlib.Path]:
 
 
 def describe_os_version() -> str:
-    if 'ANDROID_DATA' in os.environ:
+    if os.environ.get('ANDROID_DATA') is not None:
         import jnius
         bv = jnius.autoclass('android.os.Build$VERSION')
         b = jnius.autoclass('android.os.Build')
-        return "Android {} on {} {} ({})".format(bv.RELEASE, b.BRAND, b.DEVICE, b.DISPLAY)
+        return f"Android {bv.RELEASE} on {b.BRAND} {b.DEVICE} ({b.DISPLAY})"
     else:
         return platform.platform()
 
