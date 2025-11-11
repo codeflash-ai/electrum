@@ -3,6 +3,7 @@ from typing import Sequence, Tuple, Dict, TYPE_CHECKING, Set
 
 from .lnutil import SENT, RECEIVED, LOCAL, REMOTE, HTLCOwner, UpdateAddHtlc, Direction, FeeUpdate
 from .util import bfh, with_lock
+from electrum.json_db import StoredDict
 
 if TYPE_CHECKING:
     from .json_db import StoredDict
@@ -514,30 +515,54 @@ class HTLCManager:
         """
         if ctn is None:
             ctn = self.ctn_oldest_unrevoked(ctx_owner)
+        oldest_ctx_ctn = self.ctn_oldest_unrevoked(ctx_owner)
         balance = initial_balance_msat
-        if ctn >= self.ctn_oldest_unrevoked(ctx_owner):
-            balance += self._balance_delta * whose
+        if ctn >= oldest_ctx_ctn:
+            balance_delta = self._balance_delta * whose
+            balance += balance_delta
             considered_sent_htlc_ids = self._maybe_active_htlc_ids[whose]
             considered_recv_htlc_ids = self._maybe_active_htlc_ids[-whose]
+
+            # To speed up htlc_id lookup in adds and settles, pre-fetch them to local variables
+            adds_sent = self.log[whose]['adds']
+            settles_sent = self.log[whose]['settles']
+            adds_recv = self.log[-whose]['adds']
+            settles_recv = self.log[-whose]['settles']
+
+            # sent htlcs
+            for htlc_id in considered_sent_htlc_ids:
+                ctns = settles_sent.get(htlc_id)
+                if ctns is None:
+                    continue
+                settle_ctn = ctns[ctx_owner]
+                if settle_ctn is not None and settle_ctn <= ctn:
+                    htlc = adds_sent[htlc_id]
+                    balance -= htlc.amount_msat
+            # recv htlcs
+            for htlc_id in considered_recv_htlc_ids:
+                ctns = settles_recv.get(htlc_id)
+                if ctns is None:
+                    continue
+                settle_ctn = ctns[ctx_owner]
+                if settle_ctn is not None and settle_ctn <= ctn:
+                    htlc = adds_recv[htlc_id]
+                    balance += htlc.amount_msat
         else:  # ctn is too old; need to consider full log (slow...)
-            considered_sent_htlc_ids = self.log[whose]['settles']
-            considered_recv_htlc_ids = self.log[-whose]['settles']
-        # sent htlcs
-        for htlc_id in considered_sent_htlc_ids:
-            ctns = self.log[whose]['settles'].get(htlc_id, None)
-            if ctns is None:
-                continue
-            if ctns[ctx_owner] is not None and ctns[ctx_owner] <= ctn:
-                htlc = self.log[whose]['adds'][htlc_id]
-                balance -= htlc.amount_msat
-        # recv htlcs
-        for htlc_id in considered_recv_htlc_ids:
-            ctns = self.log[-whose]['settles'].get(htlc_id, None)
-            if ctns is None:
-                continue
-            if ctns[ctx_owner] is not None and ctns[ctx_owner] <= ctn:
-                htlc = self.log[-whose]['adds'][htlc_id]
-                balance += htlc.amount_msat
+            adds_sent = self.log[whose]['adds']
+            settles_sent = self.log[whose]['settles']
+            adds_recv = self.log[-whose]['adds']
+            settles_recv = self.log[-whose]['settles']
+
+            for htlc_id, ctns in settles_sent.items():
+                settle_ctn = ctns[ctx_owner]
+                if settle_ctn is not None and settle_ctn <= ctn:
+                    htlc = adds_sent[htlc_id]
+                    balance -= htlc.amount_msat
+            for htlc_id, ctns in settles_recv.items():
+                settle_ctn = ctns[ctx_owner]
+                if settle_ctn is not None and settle_ctn <= ctn:
+                    htlc = adds_recv[htlc_id]
+                    balance += htlc.amount_msat
         return balance
 
     @with_lock
