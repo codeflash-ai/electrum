@@ -1,8 +1,9 @@
 from copy import deepcopy
-from typing import Sequence, Tuple, Dict, TYPE_CHECKING, Set
+from typing import Sequence, Tuple, Dict, TYPE_CHECKING
 
 from .lnutil import SENT, RECEIVED, LOCAL, REMOTE, HTLCOwner, UpdateAddHtlc, Direction, FeeUpdate
 from .util import bfh, with_lock
+from electrum.json_db import StoredDict
 
 if TYPE_CHECKING:
     from .json_db import StoredDict
@@ -78,12 +79,21 @@ class HTLCManager:
     @with_lock
     def send_htlc(self, htlc: UpdateAddHtlc) -> UpdateAddHtlc:
         htlc_id = htlc.htlc_id
-        if htlc_id != self.get_next_htlc_id(LOCAL):
+        next_htlc_id = self.get_next_htlc_id(LOCAL)
+        if htlc_id != next_htlc_id:
             raise Exception(f"unexpected local htlc_id. next should be "
-                            f"{self.get_next_htlc_id(LOCAL)} but got {htlc_id}")
-        self.log[LOCAL]['adds'][htlc_id] = htlc
-        self.log[LOCAL]['locked_in'][htlc_id] = {LOCAL: None, REMOTE: self.ctn_latest(REMOTE)+1}
-        self.log[LOCAL]['next_htlc_id'] += 1
+                            f"{next_htlc_id} but got {htlc_id}")
+        # Use local variables for log[LOCAL] and log[REMOTE] to reduce repeated lookups
+        log_local = self.log[LOCAL]
+        log_remote = self.log[REMOTE]
+        log_local_adds = log_local['adds']
+        log_local_locked_in = log_local['locked_in']
+        log_local_adds[htlc_id] = htlc
+        # Use the inlined ctn_latest (as above)
+        latest_remote_ctn = log_remote['ctn'] + int(log_remote['revack_pending'])
+        # The "+1" outside the int() to avoid extra parentheses
+        log_local_locked_in[htlc_id] = {LOCAL: None, REMOTE: latest_remote_ctn + 1}
+        log_local['next_htlc_id'] += 1
         self._maybe_active_htlc_ids[LOCAL].add(htlc_id)
         return htlc
 
