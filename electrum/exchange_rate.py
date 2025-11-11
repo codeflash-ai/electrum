@@ -573,8 +573,10 @@ def dictinvert(d):
     inv = {}
     for k, vlist in d.items():
         for v in vlist:
-            keys = inv.setdefault(v, [])
-            keys.append(k)
+            if v in inv:
+                inv[v].append(k)
+            else:
+                inv[v] = [k]
     return inv
 
 def get_exchanges_and_currencies():
