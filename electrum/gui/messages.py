@@ -3,7 +3,10 @@ from electrum.submarine_swaps import MIN_FINAL_CLTV_DELTA_FOR_CLIENT
 
 
 def to_rtf(msg):
-    return '\n'.join(['<p>' + x + '</p>' for x in msg.split('\n\n')])
+    parts = msg.split('\n\n')
+    if len(parts) == 1:
+        return '<p>' + parts[0] + '</p>'
+    return '<p>' + '</p>\n<p>'.join(parts) + '</p>'
 
 
 MSG_COOPERATIVE_CLOSE = _(
