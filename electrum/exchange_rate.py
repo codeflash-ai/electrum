@@ -25,6 +25,8 @@ from .network import Network
 from .simple_config import SimpleConfig
 from .logging import Logger
 
+_exchanges_by_ccy_cache = {}
+
 
 # See https://en.wikipedia.org/wiki/ISO_4217
 CCY_PRECISIONS = {'BHD': 3, 'BIF': 0, 'BYR': 0, 'CLF': 4, 'CLP': 0,
@@ -623,15 +625,22 @@ CURRENCIES = get_exchanges_and_currencies()
 
 
 def get_exchanges_by_ccy(history=True):
+    key = bool(history)
+    if key in _exchanges_by_ccy_cache:
+        return _exchanges_by_ccy_cache[key]
     if not history:
-        return dictinvert(CURRENCIES)
+        result = dictinvert(CURRENCIES)
+        _exchanges_by_ccy_cache[key] = result
+        return result
     d = {}
     exchanges = CURRENCIES.keys()
     for name in exchanges:
         klass = globals()[name]
         exchange = klass(None, None)
         d[name] = exchange.history_ccys()
-    return dictinvert(d)
+    result = dictinvert(d)
+    _exchanges_by_ccy_cache[key] = result
+    return result
 
 
 class FxThread(ThreadJob, EventListener, NetworkRetryManager[str]):
