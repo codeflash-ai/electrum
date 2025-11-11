@@ -24,6 +24,7 @@ from .util import NetworkRetryManager
 from .network import Network
 from .simple_config import SimpleConfig
 from .logging import Logger
+from functools import lru_cache
 
 
 # See https://en.wikipedia.org/wiki/ISO_4217
@@ -623,12 +624,29 @@ CURRENCIES = get_exchanges_and_currencies()
 
 
 def get_exchanges_by_ccy(history=True):
+    return _cached_exchanges_by_ccy(history)  # lru_cache hit is extremely fast
+
+
+# Optimization: cache the result of the slow 'get_exchanges_by_ccy(history=True)' function
+# This avoids repeated instantiation of exchange classes and recomputation of the currency mapping.
+# Safe as long as CURRENCIES and Exchange classes are not mutated at runtime.
+@lru_cache(maxsize=2)
+def _cached_exchanges_by_ccy(history: bool):
+    # Inline original get_exchanges_by_ccy, to use its logic for cache benefit
     if not history:
+        # dictinvert is assumed cheap and CURRENCIES is assumed static.
+        # For 'not history' case, still apply cache for symmetry.
+        from electrum.exchange_rate import (  # local import to avoid cyclic issues
+            CURRENCIES, dictinvert)
         return dictinvert(CURRENCIES)
-    d = {}
+    # For 'history=True', compute mapping
+    from electrum.exchange_rate import CURRENCIES, dictinvert
     exchanges = CURRENCIES.keys()
+    d = {}
+    # Avoid repeated lookups
+    globals_ = globals()
     for name in exchanges:
-        klass = globals()[name]
+        klass = globals_[name]
         exchange = klass(None, None)
         d[name] = exchange.history_ccys()
     return dictinvert(d)
@@ -669,7 +687,7 @@ class FxThread(ThreadJob, EventListener, NetworkRetryManager[str]):
 
     @staticmethod
     def get_exchanges_by_ccy(ccy: str, history: bool) -> Sequence[str]:
-        d = get_exchanges_by_ccy(history)
+        d = _cached_exchanges_by_ccy(history)
         return d.get(ccy, [])
 
     @staticmethod
