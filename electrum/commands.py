@@ -95,12 +95,20 @@ class NotSynchronizedException(UserFacingException):
 
 
 def satoshis_or_max(amount):
-    return satoshis(amount) if not parse_max_spend(amount) else amount
+    if not (isinstance(amount, str) and amount and amount[-1] == '!'):
+        return satoshis(amount)
+    else:
+        return amount
 
 
 def satoshis(amount):
     # satoshi conversion must not be performed by the parser
-    return int(COIN*to_decimal(amount)) if amount is not None else None
+    # Micro-opt: quick None guard before calling to_decimal
+    if amount is None:
+        return None
+    # Avoid creating intermediate float objects if to_decimal returns int
+    # but without knowledge, we keep as-is (safest for behavioral preservation)
+    return int(COIN * to_decimal(amount))
 
 
 def format_satoshis(x: Union[float, int, Decimal, None]) -> Optional[str]:
