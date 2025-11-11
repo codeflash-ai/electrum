@@ -64,7 +64,7 @@ class ExchangeBase(Logger):
 
     async def get_json(self, site, get_string):
         # APIs must have https
-        url = ''.join(['https://', site, get_string])
+        url = f'https://{site}{get_string}'
         network = Network.get_instance()
         proxy = network.proxy if network else None
         async with make_aiohttp_session(proxy) as session:
@@ -221,7 +221,8 @@ class Yadio(ExchangeBase):
 
     async def get_currencies(self):
         dicts = await self.get_json('api.yadio.io', '/currencies')
-        return list(dicts.keys())
+        # keys() returns a dict_keys view, which can be more memory-efficient and faster for iteration.
+        return dicts.keys()
 
     async def get_rates(self, ccy: str) -> Mapping[str, Optional[Decimal]]:
         json = await self.get_json('api.yadio.io', '/rate/%s/BTC' % ccy)
