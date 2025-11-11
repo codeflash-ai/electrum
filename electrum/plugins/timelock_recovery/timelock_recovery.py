@@ -93,21 +93,33 @@ class TimelockRecoveryContext:
         )
 
     def _alert_tx_output(self) -> Tuple[int, 'TxOutput']:
-        tx_outputs: List[Tuple[int, 'TxOutput']] = [
-            (index, tx_output) for index, tx_output in enumerate(self.alert_tx.outputs())
-            if tx_output.address == self.get_alert_address() and tx_output.value != self.ANCHOR_OUTPUT_AMOUNT_SATS
-        ]
-        if len(tx_outputs) != 1:
+        # Optimize output selection by iterating only once and short-circuit on duplicates
+        found_idx = -1
+        found_output = None
+        count = 0
+        anchor_amount = self.ANCHOR_OUTPUT_AMOUNT_SATS
+        alert_addr = self.get_alert_address()
+        for index, tx_output in enumerate(self.alert_tx.outputs()):
+            if tx_output.address == alert_addr and tx_output.value != anchor_amount:
+                if found_output is not None:
+                    count += 1
+                    break
+                found_idx = index
+                found_output = tx_output
+                count = 1
+        if count != 1:
             # Safety check - not expected to happen
-            raise ValueError(f"Expected 1 output from the Alert transaction to the Alert Address, but got {len(tx_outputs)}.")
-        return tx_outputs[0]
+            raise ValueError(f"Expected 1 output from the Alert transaction to the Alert Address, but got {count}.")
+        return (found_idx, found_output)
 
     def _alert_tx_outpoint(self, out_idx: int) -> TxOutpoint:
         return TxOutpoint(txid=bfh(self.alert_tx.txid()), out_idx=out_idx)
 
     def make_unsigned_recovery_tx(self, fee_policy) -> 'PartialTransaction':
         prevout_index, prevout = self._alert_tx_output()
-        nsequence: int = round(self.timelock_days * 24 * 60 * 60 / 512)
+        timelock_days = self.timelock_days
+        # Avoid repeated computation
+        nsequence: int = round(timelock_days * 24 * 60 * 60 / 512)
         if nsequence > 0xFFFF:
             # Safety check - not expected to happen
             raise ValueError("Sequence number is too large")
@@ -118,12 +130,16 @@ class TimelockRecoveryContext:
         )
         recovery_tx_input.witness_utxo = prevout
 
+
+        # Use list comprehension with local variable for outputs to minimize attribute access
+        outputs_nonzero = [output for output in self.outputs if output.value != 0]
+        locktime = self.recovery_tx.locktime if self.recovery_tx else None
         return self.wallet.make_unsigned_transaction(
             coins=[recovery_tx_input],
-            outputs=[output for output in self.outputs if output.value != 0],
+            outputs=outputs_nonzero,
             fee_policy=fee_policy,
             is_sweep=False,
-            locktime=self.recovery_tx.locktime if self.recovery_tx else None,
+            locktime=locktime,
         )
 
     def add_input_info_to_recovery_tx(self):
