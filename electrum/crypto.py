@@ -36,6 +36,7 @@ import electrum_ecc as ecc
 from .util import assert_bytes, InvalidPassword, to_bytes, to_string, WalletFileException, versiontuple
 from .i18n import _
 from .logging import get_logger
+from functools import lru_cache
 
 _logger = get_logger(__name__)
 
@@ -236,7 +237,7 @@ def _pw_encode_raw(data: bytes, password: Union[bytes, str], *, version: int) ->
     if version not in KNOWN_PW_HASH_VERSIONS:
         raise UnexpectedPasswordHashVersion(version)
     # derive key from password
-    secret = _hash_password(password, version=version)
+    secret = _hash_password_cached(password, version)
     # encrypt given data
     ciphertext = EncodeAES_bytes(secret, data)
     return ciphertext
@@ -280,7 +281,15 @@ def pw_encode_with_version_and_mac(data: bytes, password: Union[bytes, str]) -> 
     version = PW_HASH_VERSION_LATEST
     mac = sha256(data)[0:4]
     ciphertext = _pw_encode_raw(data, password, version=version)
-    ciphertext_b64 = base64.b64encode(bytes([version]) + ciphertext + mac)
+    # Avoid allocating new temp bytes objects for concatenation:
+    # Allocate a single sized bytearray and write into it
+    # version (1) + ciphertext (len) + mac (4)
+    total_len = 1 + len(ciphertext) + 4
+    b = bytearray(total_len)
+    b[0] = version
+    b[1:1+len(ciphertext)] = ciphertext
+    b[-4:] = mac
+    ciphertext_b64 = base64.b64encode(b)
     return ciphertext_b64.decode('utf8')
 
 
@@ -323,7 +332,8 @@ def pw_decode(data: str, password: Union[bytes, str, None], *, version: int) -> 
 
 def sha256(x: Union[bytes, str]) -> bytes:
     x = to_bytes(x, 'utf8')
-    return bytes(hashlib.sha256(x).digest())
+    # hashlib.sha256(x).digest() already allocates as bytes, no need to call bytes() again
+    return hashlib.sha256(x).digest()
 
 
 def sha256d(x: Union[bytes, str]) -> bytes:
@@ -500,3 +510,8 @@ def get_ecdh(priv: bytes, pub: bytes) -> bytes:
 
 def privkey_to_pubkey(priv: bytes) -> bytes:
     return ecc.ECPrivkey(priv[:32]).get_public_key_bytes()
+
+
+@lru_cache(maxsize=128)
+def _hash_password_cached(password: Union[bytes, str], version: int) -> bytes:
+    return _hash_password(password, version=version)
