@@ -93,14 +93,21 @@ class TimelockRecoveryContext:
         )
 
     def _alert_tx_output(self) -> Tuple[int, 'TxOutput']:
-        tx_outputs: List[Tuple[int, 'TxOutput']] = [
-            (index, tx_output) for index, tx_output in enumerate(self.alert_tx.outputs())
-            if tx_output.address == self.get_alert_address() and tx_output.value != self.ANCHOR_OUTPUT_AMOUNT_SATS
-        ]
-        if len(tx_outputs) != 1:
-            # Safety check - not expected to happen
-            raise ValueError(f"Expected 1 output from the Alert transaction to the Alert Address, but got {len(tx_outputs)}.")
-        return tx_outputs[0]
+        # Optimize: avoid building the full output list, stop on match, immediately raise if >1 match
+        output_idx = -1
+        found = False
+        outputs = self.alert_tx.outputs()
+        count = 0
+        for index, tx_output in enumerate(outputs):
+            if tx_output.address == self.get_alert_address() and tx_output.value != self.ANCHOR_OUTPUT_AMOUNT_SATS:
+                if found:
+                    # Early raise if >1 found
+                    raise ValueError(f"Expected 1 output from the Alert transaction to the Alert Address, but got 2.")
+                output_idx = index
+                found = True
+        if not found:
+            raise ValueError(f"Expected 1 output from the Alert transaction to the Alert Address, but got 0.")
+        return (output_idx, outputs[output_idx])
 
     def _alert_tx_outpoint(self, out_idx: int) -> TxOutpoint:
         return TxOutpoint(txid=bfh(self.alert_tx.txid()), out_idx=out_idx)
