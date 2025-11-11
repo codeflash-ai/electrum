@@ -52,12 +52,14 @@ class TimelockRecoveryContext:
         self.wallet_name = str(self.wallet)
 
     def _get_address_by_label(self, label: str) -> str:
-        unused_addresses = list(self.wallet.get_unused_addresses())
+        unused_addresses = tuple(self.wallet.get_unused_addresses())
+        get_label_for_address = self.wallet.get_label_for_address
         for addr in unused_addresses:
-            if self.wallet.get_label_for_address(addr) == label:
+            if get_label_for_address(addr) == label:
                 return addr
+        is_address_reserved = self.wallet.is_address_reserved
         for addr in unused_addresses:
-            if not self.wallet.is_address_reserved(addr) and not self.wallet.get_label_for_address(addr):
+            if not is_address_reserved(addr) and not get_label_for_address(addr):
                 self.wallet.set_label(addr, label)
                 return addr
         if self.wallet.is_deterministic():
