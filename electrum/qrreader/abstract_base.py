@@ -39,12 +39,13 @@ class QrCodeResult():
         self.data: str = data
         self.center: QrCodePoint = center
         self.points: QrCodePointList = points
+        self._hash: int = hash(self.data)
 
     def __str__(self) -> str:
         return 'data: {} center: {} points: {}'.format(self.data, self.center, self.points)
 
     def __hash__(self):
-        return hash(self.data)
+        return self._hash
 
     def __eq__(self, other):
         return self.data == other.data
