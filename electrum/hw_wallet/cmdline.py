@@ -26,6 +26,7 @@ from electrum.util import print_stderr, raw_input
 from electrum.logging import get_logger
 
 from .plugin import HardwareHandlerBase
+import sys
 
 
 _logger = get_logger(__name__)
@@ -58,7 +59,8 @@ class CmdLineHandler(HardwareHandlerBase):
         return response
 
     def yes_no_question(self, msg):
-        print_stderr(msg)
+        sys.stderr.write(str(msg) + "\n")
+        sys.stderr.flush()
         return raw_input() in 'yY'
 
     def stop(self):
