@@ -143,8 +143,10 @@ class FeePolicy(Logger):
     @classmethod
     def depth_target(cls, slider_pos: int) -> int:
         """Returns mempool depth target in bytes for a fee slider position."""
-        slider_pos = max(slider_pos, 0)
-        slider_pos = min(slider_pos, len(FEE_DEPTH_TARGETS)-1)
+        if slider_pos < 0:
+            slider_pos = 0
+        elif slider_pos >= len(FEE_DEPTH_TARGETS):
+            slider_pos = len(FEE_DEPTH_TARGETS) - 1
         return FEE_DEPTH_TARGETS[slider_pos]
 
     def eta_target(self, slider_pos: int) -> int:
@@ -327,10 +329,11 @@ class FeeHistogram:
         """Returns fee in sat/kbyte.
         target: desired mempool depth in vbytes
         """
-        if self._data is None:
+        data = self._data
+        if data is None:
             return None
         depth = 0
-        for fee, s in self._data:
+        for fee, s in data:
             depth += s
             if depth > target:
                 break
