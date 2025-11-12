@@ -82,7 +82,8 @@ class AbstractNet:
 
     @classmethod
     def max_checkpoint(cls) -> int:
-        return max(0, len(cls.CHECKPOINTS) * 2016 - 1)
+        checkpoints_len = len(cls.CHECKPOINTS)
+        return checkpoints_len * 2016 - 1 if checkpoints_len else 0
 
     @classmethod
     def rev_genesis_bytes(cls) -> bytes:
