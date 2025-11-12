@@ -297,6 +297,20 @@ def impose_hard_limits_on_fee(func):
     return get_fee_within_limits
 
 
+def impose_hard_limits_on_fee(func):
+    def get_fee_within_limits(self, *args, **kwargs):
+        fee = func(self, *args, **kwargs)
+        if fee is None:
+            return fee
+        # Clamp to fee boundaries
+        if fee > FEERATE_MAX_DYNAMIC:
+            fee = FEERATE_MAX_DYNAMIC
+        if fee < FEERATE_DEFAULT_RELAY:
+            fee = FEERATE_DEFAULT_RELAY
+        return fee
+    return get_fee_within_limits
+
+
 class FeeHistogram:
 
     def __init__(self):
@@ -375,7 +389,7 @@ class FeeHistogram:
 class FeeTimeEstimates:
 
     def __init__(self):
-        self.data = {} # type: Dict[int, int]
+        self.data: Dict[int, int] = {}
 
     def get_data(self):
         return self.data
@@ -414,14 +428,20 @@ class FeeTimeEstimates:
 
     def eta_to_fee(self, slider_pos) -> Optional[int]:
         """Returns fee in sat/kbyte."""
-        slider_pos = max(slider_pos, 0)
-        slider_pos = min(slider_pos, len(FEE_ETA_TARGETS) - 1)
-        if slider_pos < len(FEE_ETA_TARGETS) - 1:
-            num_blocks = FEE_ETA_TARGETS[int(slider_pos)]
-            fee = self.eta_target_to_fee(num_blocks)
+        # Inline clamp logic (avoids repeated calls and uses arithmetic clamps)
+        lft = len(FEE_ETA_TARGETS) - 1
+        if slider_pos <= 0:
+            pos = 0
+        elif slider_pos >= lft:
+            pos = lft
         else:
-            fee = self.eta_target_to_fee(1)
-        return fee
+            pos = int(slider_pos)
+        if pos < lft:
+            # use fast index, avoid repeated int conversion
+            num_blocks = FEE_ETA_TARGETS[pos]
+        else:
+            num_blocks = 1
+        return self.eta_target_to_fee(num_blocks)
 
     @impose_hard_limits_on_fee
     def eta_target_to_fee(self, num_blocks: int) -> Optional[int]:
@@ -429,13 +449,11 @@ class FeeTimeEstimates:
         if num_blocks == 1:
             fee = self.data.get(2)
             if fee is not None:
-                fee += fee / 2
-                fee = int(fee)
+                # avoid float division/casting; integer math is faster
+                fee += fee // 2
         else:
             fee = self.data.get(num_blocks)
-            if fee is not None:
-                fee = int(fee)
         # fallback for regtest
         if fee is None and constants.net is constants.BitcoinRegtest:
             return FEERATE_REGTEST_STATIC_FEE
-        return fee
+        return int(fee) if fee is not None else None
