@@ -79,6 +79,8 @@ def bitstr_to_bytestr(s):
 
 
 def bytestr_to_int(s):
+    if isinstance(s, (bytes, bytearray)):
+        return int.from_bytes(s, 'big')
     i = 0
     for char in s:
         i <<= 8
