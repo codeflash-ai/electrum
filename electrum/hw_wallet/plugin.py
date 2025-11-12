@@ -312,14 +312,18 @@ class HardwareHandlerBase:
     device: str
 
     def get_wallet(self) -> Optional['Abstract_Wallet']:
-        if self.win is not None:
-            if hasattr(self.win, 'wallet'):
-                return self.win.wallet
+        win = self.win
+        # Inline attribute read and minimize hasattr call
+        if win is not None:
+            # Optimize hasattr + attribute access: use getattr with default for direct single lookup
+            return getattr(win, 'wallet', None)
 
     def get_gui_thread(self) -> Optional['threading.Thread']:
         if self.win is not None:
-            if hasattr(self.win, 'gui_thread'):
+            try:
                 return self.win.gui_thread
+            except AttributeError:
+                pass
 
     def update_status(self, paired: bool) -> None:
         pass
