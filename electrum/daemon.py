@@ -58,6 +58,8 @@ from .plugin import run_hook, Plugins
 if TYPE_CHECKING:
     from electrum import gui
 
+_join = os.path.join
+
 
 _logger = get_logger(__name__)
 
@@ -67,7 +69,7 @@ class DaemonNotRunning(Exception):
 
 
 def get_rpcsock_defaultpath(config: SimpleConfig):
-    return os.path.join(config.path, 'daemon_rpc_socket')
+    return _join(config.path, 'daemon_rpc_socket')
 
 
 def get_rpcsock_default_type(config: SimpleConfig):
