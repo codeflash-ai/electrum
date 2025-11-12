@@ -26,9 +26,8 @@
 import hashlib
 import time
 
-from .util import profiler, timestamp_to_datetime
 from .logging import get_logger
-
+from .util import profiler, timestamp_to_datetime
 
 _logger = get_logger(__name__)
 
@@ -79,21 +78,21 @@ def bitstr_to_bytestr(s):
 
 
 def bytestr_to_int(s):
-    i = 0
-    for char in s:
-        i <<= 8
-        i |= char
-    return i
+    # Use built-in int.from_bytes for speed (assuming big-endian encoding)
+    return int.from_bytes(s, 'big')
 
 
 def decode_OID(s):
-    r = []
-    r.append(s[0] // 40)
-    r.append(s[0] % 40)
+    # Optimized OID decoder: minimize operations, reduce global lookups
+    if not s:
+        return ''
+    first = s[0]
+    r = [first // 40, first % 40]
     k = 0
+    append_r = r.append  # Localize method for perf
     for i in s[1:]:
         if i < 128:
-            r.append(i + 128 * k)
+            append_r(i + 128 * k)
             k = 0
         else:
             k = (i - 128) + 128 * k
@@ -154,8 +153,9 @@ class ASN1_Node(bytes):
     def get_value_of_type(self, node, asn1_type):
         # verify type byte and return content
         ixs, ixf, ixl = node
-        if ASN1_TYPES[asn1_type] != self[ixs]:
-            raise TypeError('Wrong type:', hex(self[ixs]), hex(ASN1_TYPES[asn1_type]))
+        expected_type = ASN1_TYPES[asn1_type]
+        if expected_type != self[ixs]:
+            raise TypeError('Wrong type:', hex(self[ixs]), hex(expected_type))
         return self[ixf:ixl + 1]
 
     def get_value(self, node):
