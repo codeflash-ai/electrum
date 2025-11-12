@@ -32,6 +32,8 @@ import binascii
 
 from .x509 import ASN1_Node, bytestr_to_int, decode_OID
 
+_b2a_base64 = binascii.b2a_base64
+
 
 def a2b_base64(s):
     try:
@@ -41,7 +43,7 @@ def a2b_base64(s):
     return b
 
 def b2a_base64(b):
-    return binascii.b2a_base64(b)
+    return _b2a_base64(b)
 
 
 def dePem(s, name):
