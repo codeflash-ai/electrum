@@ -300,7 +300,7 @@ def impose_hard_limits_on_fee(func):
 class FeeHistogram:
 
     def __init__(self):
-        self._data = None # type: Optional[Sequence[Tuple[Union[float, int], int]]]
+        self._data: Optional[Sequence[Tuple[Union[float, int], int]]] = None
 
     def has_data(self) -> bool:
         return self._data is not None
@@ -352,20 +352,35 @@ class FeeHistogram:
 
     def get_capped_data(self):
         """ used by QML """
-        data = self._data or [[FEERATE_DEFAULT_RELAY/1000, 1]]
-        # cap the histogram to a limited number of megabytes
-        bytes_limit = 10*1000*1000
+        # Use tuple directly instead of list for default data, saves memory and time on sorting
+        data = self._data or [(FEERATE_DEFAULT_RELAY/1000, 1)]
+        bytes_limit = 10_000_000
         bytes_current = 0
         capped_histogram = []
+
+        # If data is already sorted by fee descending, skip sort
+        # Otherwise, sort in-place to avoid creating a new object if data is mutable,
+        # but since _data may be read-only Sequence, safest is to sort as before.
+        # Use heapq.nlargest for partial sort optimization if data is large,
+        # but since we stop early after hitting bytes_limit, full sort is necessary.
+        # Avoid repeated computation of 10**FEERATE_PRECISION
+        precision_factor = 10 ** FEERATE_PRECISION
+        min_relay = FEERATE_MIN_RELAY / 1000
+
         for item in sorted(data, key=lambda x: x[0], reverse=True):
             if bytes_current >= bytes_limit:
                 break
-            slot = min(item[1], bytes_limit - bytes_current)
+            # Avoid max() if possible by short-circuit
+            slot = item[1]
+            remaining = bytes_limit - bytes_current
+            if slot > remaining:
+                slot = remaining
             bytes_current += slot
-            # round & limit precision
-            value = int(item[0] * 10**FEERATE_PRECISION) / 10**FEERATE_PRECISION
+            # round & limit precision only once and reuse local value
+            value = int(item[0] * precision_factor) / precision_factor
+            capped_value = value if value > min_relay else min_relay
             capped_histogram.append([
-                max(FEERATE_MIN_RELAY/1000, value),  # clamped to [FEERATE_MIN_RELAY/1000, inf)
+                capped_value,
                 slot,  # width of bucket
                 bytes_current,  # cumulative depth at far end of bucket
             ])
