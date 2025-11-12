@@ -7,7 +7,7 @@ import electrum_ecc as ecc
 from electrum.i18n import _
 from electrum.util import UserCancelled
 from electrum.keystore import bip39_normalize_passphrase
-from electrum.bip32 import BIP32Node, convert_bip32_strpath_to_intpath
+from electrum.bip32 import BIP32Node
 from electrum.logging import Logger
 from electrum.plugin import runs_in_hwd_thread
 from electrum.hw_wallet.plugin import HardwareClientBase, HardwareHandlerBase
@@ -155,7 +155,45 @@ class KeepKeyClientBase(HardwareClientBase, GuiMixin, Logger):
 
     @staticmethod
     def expand_path(n):
-        return convert_bip32_strpath_to_intpath(n)
+        # Inline and specialize fast path for empty/None values to avoid function call overhead
+        if not n:
+            return []
+        # Remove trailing slash in-place if present
+        if n.endswith("/"):
+            n = n[:-1]
+        segments = n.split('/')
+        # Handle 'm' prefix fast
+        if segments[0] == "m":
+            segments = segments[1:]
+        # Fast allocation of output list to increase memory efficiency (upper bound allocation, by skipping filtered '')
+        path = []
+        BIP32_PRIME = 0x80000000
+        UINT32_MAX = 0xffffffff
+        for x in segments:
+            if x == '':
+                continue
+            prime = 0
+            # Use single index lookup for suffixes
+            x_len = len(x)
+            if x_len > 0:
+                c = x[-1]
+                if c == "'" or c == "h":  # skipping .endswith for two char check, faster for single char
+                    x = x[:-1]
+                    prime = BIP32_PRIME
+            # Avoid unnecessary str.startswith (rare case, retain original logic)
+            if x_len > 0 and x[0] == '-':
+                if prime:
+                    raise ValueError(f"bip32 path child index is signalling hardened level in multiple ways")
+                prime = BIP32_PRIME
+            try:
+                x_int = int(x)
+            except ValueError as e:
+                raise ValueError(f"failed to parse bip32 path: {(str(e))}") from None
+            child_index = abs(x_int) | prime
+            if child_index > UINT32_MAX:
+                raise ValueError(f"bip32 path child index too large: {child_index}")
+            path.append(child_index)
+        return path
 
     @runs_in_hwd_thread
     def cancel(self):
