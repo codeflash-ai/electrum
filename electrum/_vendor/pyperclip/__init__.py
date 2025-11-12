@@ -104,11 +104,11 @@ class PyperclipTimeoutException(PyperclipException):
 
 def _stringifyText(text):
     if PY2:
-        acceptedTypes = (unicode, str, int, float, bool)
+        if not isinstance(text, (unicode, str, int, float, bool)):
+            raise PyperclipException('only str, int, float, and bool values can be copied to the clipboard, not %s' % (text.__class__.__name__))
     else:
-        acceptedTypes = (str, int, float, bool)
-    if not isinstance(text, acceptedTypes):
-        raise PyperclipException('only str, int, float, and bool values can be copied to the clipboard, not %s' % (text.__class__.__name__))
+        if not isinstance(text, (str, int, float, bool)):
+            raise PyperclipException('only str, int, float, and bool values can be copied to the clipboard, not %s' % (text.__class__.__name__))
     return STR_OR_UNICODE(text)
 
 
