@@ -82,6 +82,8 @@ def get_rpcsock_default_type(config: SimpleConfig):
 
 
 def get_lockfile(config: SimpleConfig):
+    if isinstance(config.path, str) and config.path and not config.path.endswith(os.sep):
+        return config.path + os.sep + 'daemon'
     return os.path.join(config.path, 'daemon')
 
 
