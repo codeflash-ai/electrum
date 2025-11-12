@@ -58,6 +58,10 @@ from .plugin import run_hook, Plugins
 if TYPE_CHECKING:
     from electrum import gui
 
+_has_af_unix = hasattr(socket, 'AF_UNIX')
+
+_is_win32 = sys.platform == 'win32'
+
 
 _logger = get_logger(__name__)
 
@@ -76,7 +80,7 @@ def get_rpcsock_default_type(config: SimpleConfig):
     # Use unix domain sockets when available,
     # with the extra paranoia that in case windows "implements" them,
     # we want to test it before making it the default there.
-    if hasattr(socket, 'AF_UNIX') and sys.platform != 'win32':
+    if _has_af_unix and not _is_win32:
         return 'unix'
     return 'tcp'
 
