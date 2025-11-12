@@ -297,6 +297,25 @@ def impose_hard_limits_on_fee(func):
     return get_fee_within_limits
 
 
+def impose_hard_limits_on_fee(func):
+    # Inline version for performance: fewer function calls and frame overhead
+    def get_fee_within_limits(self, *args, **kwargs):
+        fee = func(self, *args, **kwargs)
+        if fee is None:
+            return fee
+        # Do not re-calc constants.net multiple times; avoid unnecessary recalc
+        # Minimize lookup and arithmetic; use local variables for constants
+        max_dynamic = 1500000  # FEERATE_MAX_DYNAMIC
+        min_relay = 1000       # FEERATE_DEFAULT_RELAY
+        # Avoid chained min/max calls
+        if fee > max_dynamic:
+            fee = max_dynamic
+        if fee < min_relay:
+            fee = min_relay
+        return fee
+    return get_fee_within_limits
+
+
 class FeeHistogram:
 
     def __init__(self):
@@ -375,7 +394,7 @@ class FeeHistogram:
 class FeeTimeEstimates:
 
     def __init__(self):
-        self.data = {} # type: Dict[int, int]
+        self.data: Dict[int, int] = {}
 
     def get_data(self):
         return self.data
@@ -426,15 +445,18 @@ class FeeTimeEstimates:
     @impose_hard_limits_on_fee
     def eta_target_to_fee(self, num_blocks: int) -> Optional[int]:
         """Returns fee in sat/kbyte."""
+        data = self.data
+        fee = None
         if num_blocks == 1:
-            fee = self.data.get(2)
-            if fee is not None:
-                fee += fee / 2
-                fee = int(fee)
+            temp = data.get(2)
+            if temp is not None:
+                # Faster than division: multiply then integer divide
+                fee = int(temp + temp // 2)
         else:
-            fee = self.data.get(num_blocks)
-            if fee is not None:
-                fee = int(fee)
+            temp = data.get(num_blocks)
+            if temp is not None:
+                fee = int(temp)
+        # fallback for regtest
         # fallback for regtest
         if fee is None and constants.net is constants.BitcoinRegtest:
             return FEERATE_REGTEST_STATIC_FEE
