@@ -55,11 +55,16 @@ def hardcoded_trampoline_nodes() -> Mapping[str, LNPeerAddr]:
 
 
 def trampolines_by_id():
-    return dict([(x.pubkey, x) for x in hardcoded_trampoline_nodes().values()])
+    return {x.pubkey: x for x in hardcoded_trampoline_nodes().values()}
 
 
 def is_hardcoded_trampoline(node_id: bytes) -> bool:
-    return node_id in trampolines_by_id()
+    try:
+        cache = is_hardcoded_trampoline._cache
+    except AttributeError:
+        cache = trampolines_by_id()
+        is_hardcoded_trampoline._cache = cache
+    return node_id in cache
 
 
 def encode_routing_info(r_tags: Sequence[Sequence[Sequence[Any]]]) -> List[bytes]:
