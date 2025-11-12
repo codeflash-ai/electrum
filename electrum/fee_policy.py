@@ -8,6 +8,7 @@ from .i18n import _
 from .util import NoDynamicFeeEstimates, quantize_feerate, format_fee_satoshis, FEERATE_PRECISION
 from . import util, constants
 from .logging import Logger
+from functools import lru_cache
 
 if TYPE_CHECKING:
     from .network import Network
@@ -208,8 +209,9 @@ class FeePolicy(Logger):
         """Returns text tooltip for given mempool depth (in vbytes)."""
         if depth is None:
             return "unknown from tip"
-        depth_mb = cls.get_depth_mb_str(depth)
-        return _("{} from tip").format(depth_mb)
+        # For common values used with slider, memoize formatting and translation
+        depth_mb_str = cls.get_depth_mb_str(depth)
+        return cls._get_translated_tip_str(depth_mb_str)
 
     @classmethod
     def get_depth_mb_str(cls, depth: int) -> str:
@@ -277,6 +279,12 @@ class FeePolicy(Logger):
         # the calculation needs to use the same precision:
         fee_per_byte = quantize_feerate(fee_per_byte)
         return math.ceil(fee_per_byte * size)
+
+    @staticmethod
+    @lru_cache(maxsize=128)
+    def _get_translated_tip_str(depth_mb_str: str) -> str:
+        # Memoize the translation for each unique depth string
+        return _("{} from tip").format(depth_mb_str)
 
 
 class FixedFeePolicy(FeePolicy):
