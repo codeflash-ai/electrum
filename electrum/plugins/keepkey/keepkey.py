@@ -76,7 +76,6 @@ class KeepKeyPlugin(HW_PluginBase):
         try:
             from . import client
             from .keepkeylib import keepkeylib
-            from .keepkeylib.keepkeylib import ckd_public, transport_hid, transport_webusb
             self.client_class = client.KeepKeyClient
             self.ckd_public = keepkeylib.ckd_public
             self.types = keepkeylib.client.types
@@ -107,7 +106,10 @@ class KeepKeyPlugin(HW_PluginBase):
 
     @staticmethod
     def _dev_to_str(dev: "usb1.USBDevice") -> str:
-        return ":".join(str(x) for x in ["%03i" % (dev.getBusNumber(),)] + dev.getPortNumberList())
+        # Avoid list comprehension; generator expression directly to join for memory efficiency
+        bus_number_str = "%03i" % dev.getBusNumber()
+        # getPortNumberList returns a list, convert elements to str before joining
+        return ":".join([bus_number_str, *map(str, dev.getPortNumberList())])
 
     @runs_in_hwd_thread
     def hid_transport(self, pair):
