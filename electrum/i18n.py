@@ -94,7 +94,6 @@ def _ensure_translation_keeps_format_string_syntax_similar(translator):
 #       However, only if the translators understand and use it correctly!
 #          _("time left: {0} minutes, {1} seconds").format(t//60, t%60)                   # <- works. ok to use
 #          _("time left: {mins} minutes, {secs} seconds").format(mins=t//60, secs=t%60)   # <- works, but too complex
-@_ensure_translation_keeps_format_string_syntax_similar
 def _(msg: str, *, context=None) -> str:
     if msg == "":
         return ""  # empty string must not be translated. see #7158
