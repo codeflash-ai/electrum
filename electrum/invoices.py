@@ -178,9 +178,9 @@ class BaseInvoice(StoredObject):
         Callers who need msat precision should call get_amount_msat()
         """
         amount_msat = self.amount_msat
-        if amount_msat in [None, "!"]:
+        if amount_msat is None or amount_msat == "!":
             return amount_msat
-        return int(amount_msat // 1000)
+        return amount_msat // 1000
 
     def set_amount_msat(self, amount_msat: Union[int, str]) -> None:
         """The GUI uses this to fill the amount for a zero-amount invoice."""
