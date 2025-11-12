@@ -207,7 +207,8 @@ class X509(object):
         self.data = der.get_all(cert)
 
         # optional version field
-        if der.get_value(cert)[0] == 0xa0:
+        cv = der.get_value(cert)
+        if cv[0] == 0xa0:
             version = der.first_child(cert)
             serial_number = der.next_node(version)
         else:
@@ -248,8 +249,9 @@ class X509(object):
             exponent = spk.next_node(modulus)
             rsa_n = spk.get_value_of_type(modulus, 'INTEGER')
             rsa_e = spk.get_value_of_type(exponent, 'INTEGER')
-            self.modulus = int.from_bytes(rsa_n, byteorder='big', signed=False)
-            self.exponent = int.from_bytes(rsa_e, byteorder='big', signed=False)
+            # Use int.from_bytes directly on memoryview for efficiency
+            self.modulus = int.from_bytes(memoryview(rsa_n), 'big', signed=False)
+            self.exponent = int.from_bytes(memoryview(rsa_e), 'big', signed=False)
         else:
             subject_public_key = der.next_node(public_key_algo)
             spk = der.get_value_of_type(subject_public_key, 'BIT STRING')
@@ -260,31 +262,38 @@ class X509(object):
         self.AKI = None
         self.SKI = None
         i = subject_pki
-        while i[2] < cert[2]:
+        cert_end = cert[2]
+        der_get_dict = der.get_dict
+        ASN1_Node_class = ASN1_Node  # local binding for loop performance
+        decode_oid_2_5_29_19 = '2.5.29.19'
+        decode_oid_2_5_29_14 = '2.5.29.14'
+        decode_oid_2_5_29_35 = '2.5.29.35'
+        while i[2] < cert_end:
             i = der.next_node(i)
-            d = der.get_dict(i)
+            d = der_get_dict(i)
             for oid, value in d.items():
-                value = ASN1_Node(value)
-                if oid == '2.5.29.19':
+                value_node = ASN1_Node_class(value)
+                if oid == decode_oid_2_5_29_19:
                     # Basic Constraints
-                    self.CA = bool(value)
-                elif oid == '2.5.29.14':
+                    self.CA = bool(value_node)
+                elif oid == decode_oid_2_5_29_14:
                     # Subject Key Identifier
-                    r = value.root()
-                    value = value.get_value_of_type(r, 'OCTET STRING')
-                    self.SKI = value.hex()
-                elif oid == '2.5.29.35':
+                    r = value_node.root()
+                    value_oct = value_node.get_value_of_type(r, 'OCTET STRING')
+                    self.SKI = value_oct.hex()
+                elif oid == decode_oid_2_5_29_35:
                     # Authority Key Identifier
-                    self.AKI = value.get_sequence()[0].hex()
-                else:
-                    pass
+                    self.AKI = value_node.get_sequence()[0].hex()
+
+        # cert signature
 
         # cert signature
         cert_sig_algo = der.next_node(cert)
         ii = der.first_child(cert_sig_algo)
         self.cert_sig_algo = decode_OID(der.get_value_of_type(ii, 'OBJECT IDENTIFIER'))
         cert_sig = der.next_node(cert_sig_algo)
-        self.signature = der.get_value(cert_sig)[1:]
+        sig_val = der.get_value(cert_sig)
+        self.signature = sig_val[1:]  # skip unused bits byte
 
     def get_keyID(self):
         # http://security.stackexchange.com/questions/72077/validating-an-ssl-certificate-chain-according-to-rfc-5280-am-i-understanding-th
