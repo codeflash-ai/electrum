@@ -214,8 +214,7 @@ class FeePolicy(Logger):
     @classmethod
     def get_depth_mb_str(cls, depth: int) -> str:
         # e.g. 500_000 -> "0.50 MB"
-        depth_mb = "{:.2f}".format(depth / 1_000_000)  # maybe .rstrip("0") ?
-        return f"{depth_mb} {util.UI_UNIT_NAME_MEMPOOL_MB}"
+        return f"{depth / 1_000_000:.2f} {util.UI_UNIT_NAME_MEMPOOL_MB}"
 
     def fee_per_kb(self, network: 'Network') -> Optional[int]:
         """Returns sat/kvB fee to pay for a txn.
