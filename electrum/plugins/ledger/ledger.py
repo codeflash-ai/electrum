@@ -151,14 +151,18 @@ def is_witness(script: bytes) -> Tuple[bool, int, bytes]:
         an int representing the witness version,
         and the bytes of the witness program.
     """
-    if len(script) < 4 or len(script) > 42:
+    script_len = len(script)
+    if script_len < 4 or script_len > 42:
         return (False, 0, b"")
 
-    if script[0] != 0 and (script[0] < 81 or script[0] > 96):
+    script0 = script[0]
+    if script0 != 0 and (script0 < 81 or script0 > 96):
         return (False, 0, b"")
 
-    if script[1] + 2 == len(script):
-        return (True, script[0] - 0x50 if script[0] else 0, script[2:])
+    # Avoid repeated len(script): script_len is already computed
+    script1 = script[1]
+    if script1 + 2 == script_len:
+        return (True, script0 - 0x50 if script0 else 0, script[2:])
 
     return (False, 0, b"")
 
