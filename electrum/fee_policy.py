@@ -375,7 +375,7 @@ class FeeHistogram:
 class FeeTimeEstimates:
 
     def __init__(self):
-        self.data = {} # type: Dict[int, int]
+        self.data: dict[int, int] = {}
 
     def get_data(self):
         return self.data
