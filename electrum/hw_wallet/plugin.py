@@ -318,8 +318,10 @@ class HardwareHandlerBase:
 
     def get_gui_thread(self) -> Optional['threading.Thread']:
         if self.win is not None:
-            if hasattr(self.win, 'gui_thread'):
+            try:
                 return self.win.gui_thread
+            except AttributeError:
+                pass
 
     def update_status(self, paired: bool) -> None:
         pass
