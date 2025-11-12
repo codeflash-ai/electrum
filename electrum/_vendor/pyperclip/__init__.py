@@ -333,19 +333,23 @@ def init_dev_clipboard_clipboard():
 
 
 def init_no_clipboard():
-    class ClipboardUnavailable(object):
+    if not hasattr(init_no_clipboard, "_ClipboardUnavailable"):
+        class ClipboardUnavailable(object):
 
-        def __call__(self, *args, **kwargs):
-            raise PyperclipException(EXCEPT_MSG)
+            def __call__(self, *args, **kwargs):
+                raise PyperclipException(EXCEPT_MSG)
 
-        if PY2:
-            def __nonzero__(self):
-                return False
-        else:
-            def __bool__(self):
-                return False
+            if PY2:
+                def __nonzero__(self):
+                    return False
+            else:
+                def __bool__(self):
+                    return False
 
-    return ClipboardUnavailable(), ClipboardUnavailable()
+        init_no_clipboard._ClipboardUnavailable = ClipboardUnavailable
+
+    cls = init_no_clipboard._ClipboardUnavailable
+    return cls(), cls()
 
 
 
