@@ -318,8 +318,10 @@ class HardwareHandlerBase:
 
     def get_gui_thread(self) -> Optional['threading.Thread']:
         if self.win is not None:
-            if hasattr(self.win, 'gui_thread'):
+            try:
                 return self.win.gui_thread
+            except AttributeError:
+                pass
 
     def update_status(self, paired: bool) -> None:
         pass
@@ -351,7 +353,7 @@ class HardwareHandlerBase:
 
 
 def is_any_tx_output_on_change_branch(tx: PartialTransaction) -> bool:
-    return any([txout.is_change for txout in tx.outputs()])
+    return any(txout.is_change for txout in tx.outputs())
 
 
 def trezor_validate_op_return_output_and_get_data(output: TxOutput) -> bytes:
