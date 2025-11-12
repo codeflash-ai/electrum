@@ -19,6 +19,8 @@ from .crypto import sha256d
 if TYPE_CHECKING:
     from .paymentrequest import PaymentRequest
 
+_cur_time_func = time.time
+
 # convention: 'invoices' = outgoing , 'request' = incoming
 
 # status of payment requests
@@ -157,11 +159,17 @@ class BaseInvoice(StoredObject):
 
     @staticmethod
     def _get_cur_time():  # for unit tests
-        return time.time()
+        # Minor micro-optimization: cache function at module init to avoid global lookup on every call
+        return _cur_time_func()
 
     def has_expired(self) -> bool:
-        exp = self.get_expiration_date()
-        return bool(exp) and exp < self._get_cur_time()
+        # Inline local, reorder to minimize number of function calls and object access:
+        # avoids fetching expiration date if exp==0 early, slight reduction of work.
+        exp = self.exp
+        if not exp:
+            return False
+        expiration = exp + self.time
+        return expiration < self._get_cur_time()
 
     def get_amount_msat(self) -> Union[int, str, None]:
         return self.amount_msat
