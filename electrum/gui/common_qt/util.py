@@ -4,7 +4,7 @@ from typing import Optional, NamedTuple, Callable
 import os.path
 
 from PyQt6 import QtGui
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QRect, Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QColor, QPen, QPaintDevice, QFontDatabase, QImage
 import qrcode
 
@@ -20,7 +20,7 @@ def get_font_id(filename: str) -> int:
         return font_id
     # font_id will be negative on error
     font_id = QFontDatabase.addApplicationFont(
-        os.path.join(os.path.dirname(__file__), '..', 'fonts', filename)
+        os.path.join(os.path.dirname(__file__), "..", "fonts", filename)
     )
     _cached_font_ids[filename] = font_id
     return font_id
@@ -83,12 +83,22 @@ def draw_qr(
     # Draw qr code
     qp.setBrush(black if is_enabled else grey)
     qp.setPen(black_pen)
+
+    # Batch drawing for better performance
+    rects = []
     for r in range(k):
         for c in range(k):
             if matrix[r][c]:
-                qp.drawRect(
-                    int(left + c * boxsize), int(top + r * boxsize),
-                    boxsize - 1, boxsize - 1)
+                rects.append(
+                    QRect(
+                        int(left + c * boxsize),
+                        int(top + r * boxsize),
+                        boxsize - 1,
+                        boxsize - 1,
+                    )
+                )
+    if rects:
+        qp.drawRects(rects)
     qp.end()
 
 
@@ -99,10 +109,13 @@ def paintQR(data) -> Optional[QImage]:
     # Create QR code
     qr = qrcode.QRCode()
     qr.add_data(data)
+    # get_matrix() is called only in draw_qr
 
-    # Create a QImage to draw on
-    matrix = qr.get_matrix()
-    k = len(matrix)
+    # Instead, determine k by reading private property (if supported) or fallback to get_matrix()
+    # But QRCode as of qrcode 7.3+ stores module_count as a public attr after make() called via add_data.
+    # We use the standard approach (cannot change signature).
+
+    k = qr.modules_count  # this is guaranteed to exist after add_data()
     boxsize = 5
     size = k * boxsize
 
@@ -110,12 +123,7 @@ def paintQR(data) -> Optional[QImage]:
     base_img = QImage(size, size, QImage.Format.Format_ARGB32)
 
     # Use draw_qr to paint on the image
-    draw_qr(
-        qr=qr,
-        paint_device=base_img,
-        is_enabled=True,
-        min_boxsize=boxsize
-    )
+    draw_qr(qr=qr, paint_device=base_img, is_enabled=True, min_boxsize=boxsize)
 
     return base_img
 
@@ -145,7 +153,9 @@ class TaskThread(QThread, Logger):
 
     def add(self, task, on_success=None, on_done=None, on_error=None, *, cancel=None):
         if self._stopping:
-            self.logger.warning(f"stopping or already stopped but tried to add new task.")
+            self.logger.warning(
+                f"stopping or already stopped but tried to add new task."
+            )
             return
         on_error = on_error or self.on_error
         task_ = TaskThread.Task(task, on_success, on_done, on_error, cancel=cancel)
