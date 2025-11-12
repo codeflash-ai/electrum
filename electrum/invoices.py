@@ -15,6 +15,7 @@ from .bitcoin import COIN, TOTAL_COIN_SUPPLY_LIMIT_IN_BTC
 from .bitcoin import address_to_script
 from .transaction import PartialTxOutput
 from .crypto import sha256d
+from functools import lru_cache
 
 if TYPE_CHECKING:
     from .paymentrequest import PaymentRequest
@@ -47,6 +48,7 @@ pr_color = {
 }
 
 
+@lru_cache(maxsize=1)
 def pr_tooltips():
     return {
         PR_UNPAID: _('Unpaid'),
