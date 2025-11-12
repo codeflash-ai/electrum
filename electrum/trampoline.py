@@ -64,16 +64,23 @@ def is_hardcoded_trampoline(node_id: bytes) -> bool:
 
 def encode_routing_info(r_tags: Sequence[Sequence[Sequence[Any]]]) -> List[bytes]:
     routes = []
+    # Preallocate common values for byte conversion to avoid string lookup overhead
+    int_to_bytes = int.to_bytes
+
     for route in r_tags:
-        result = bytes([len(route)])
+        steps = []
+        steps_append = steps.append  # Micro-optimization: local alias for faster attribute access
+        steps_append(len(route).to_bytes(1, "big"))
+
         for step in route:
             pubkey, scid, feebase, feerate, cltv = step
-            result += pubkey
-            result += scid
-            result += int.to_bytes(feebase, length=4, byteorder="big", signed=False)
-            result += int.to_bytes(feerate, length=4, byteorder="big", signed=False)
-            result += int.to_bytes(cltv, length=2, byteorder="big", signed=False)
-        routes.append(result)
+            steps_append(pubkey)
+            steps_append(scid)
+            steps_append(int_to_bytes(feebase, 4, "big", signed=False))
+            steps_append(int_to_bytes(feerate, 4, "big", signed=False))
+            steps_append(int_to_bytes(cltv, 2, "big", signed=False))
+
+        routes.append(b"".join(steps))
     return routes
 
 
