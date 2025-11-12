@@ -23,14 +23,12 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 import functools
+import gettext
 import os
 import string
 from typing import Optional
 
-import gettext
-
 from .logging import get_logger
-
 
 _logger = get_logger(__name__)
 LOCALE_DIR = os.path.join(os.path.dirname(__file__), 'locale', 'locale')

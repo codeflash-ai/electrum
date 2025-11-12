@@ -416,13 +416,19 @@ def _make_group_prefix(
 
 
 def _group_status(group: Set[Share], group_prefix) -> str:
-    len(group)
-    if not group:
-        return _EMPTY + _('{} shares from group {}').format('<b>0</b> ', f'<b>{group_prefix}</b>') + f'.<br/>'
+    group_size = len(group)
+    if not group_size:
+        return _EMPTY + _('{} shares from group {}').format('<b>0</b> ', f'<b>{group_prefix}</b>') + '.<br/>'
     else:
         share = next(iter(group))
-        icon = _FINISHED if len(group) >= share.member_threshold else _INPROGRESS
-        return icon + _('{} of {} shares needed from group {}').format(f'<b>{len(group)}</b>', f'<b>{share.member_threshold}</b>', f'<b>{group_prefix}</b>') + f'.<br/>'
+        threshold = share.member_threshold
+        icon = _FINISHED if group_size >= threshold else _INPROGRESS
+        return (
+            icon +
+            _('{} of {} shares needed from group {}').format(
+                f'<b>{group_size}</b>', f'<b>{threshold}</b>', f'<b>{group_prefix}</b>'
+            ) + '.<br/>'
+        )
 
 
 """
