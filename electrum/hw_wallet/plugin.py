@@ -59,6 +59,9 @@ class HW_PluginBase(BasePlugin, ABC):
         self.keystore_class.plugin = self
         self._ignore_outdated_fw = False
 
+        # Cache device_manager for much faster attribute access in high-use code
+        self._device_manager = self.parent.device_manager
+
     def is_enabled(self):
         return True
 
@@ -93,11 +96,12 @@ class HW_PluginBase(BasePlugin, ABC):
     def get_client(self, keystore: 'Hardware_KeyStore', force_pair: bool = True, *,
                    devices: Sequence['Device'] = None,
                    allow_user_interaction: bool = True) -> Optional['HardwareClientBase']:
-        devmgr = self.device_manager()
+        devmgr = self._device_manager  # direct cached access; safe and faster
         handler = keystore.handler
-        client = devmgr.client_for_keystore(self, handler, keystore, force_pair,
-                                            devices=devices,
-                                            allow_user_interaction=allow_user_interaction)
+        client = devmgr.client_for_keystore(
+            self, handler, keystore, force_pair,
+            devices=devices,
+            allow_user_interaction=allow_user_interaction)
         return client
 
     def show_address(self, wallet: 'Abstract_Wallet', address, keystore: 'Hardware_KeyStore' = None):
@@ -318,8 +322,10 @@ class HardwareHandlerBase:
 
     def get_gui_thread(self) -> Optional['threading.Thread']:
         if self.win is not None:
-            if hasattr(self.win, 'gui_thread'):
+            try:
                 return self.win.gui_thread
+            except AttributeError:
+                pass
 
     def update_status(self, paired: bool) -> None:
         pass
