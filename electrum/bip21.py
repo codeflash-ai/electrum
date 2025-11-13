@@ -114,17 +114,15 @@ def create_bip21_uri(addr, amount_sat: Optional[int], message: Optional[str],
         query.append('amount=%s' % format_satoshis_plain(amount_sat))
     if message:
         query.append('message=%s' % urllib.parse.quote(message))
+    quote = urllib.parse.quote
     for k, v in extra_query_params.items():
-        if not isinstance(k, str) or k != urllib.parse.quote(k):
+        if not isinstance(k, str) or k != quote(k):
             raise Exception(f"illegal key for URI: {repr(k)}")
-        v = urllib.parse.quote(v)
-        query.append(f"{k}={v}")
-    p = urllib.parse.ParseResult(
-        scheme=BITCOIN_BIP21_URI_SCHEME,
-        netloc='',
-        path=addr,
-        params='',
-        query='&'.join(query),
-        fragment=''
-    )
-    return str(urllib.parse.urlunparse(p))
+        query.append(f"{k}={quote(v)}")
+    
+    query_str = '&'.join(query)
+    
+    if query_str:
+        return f"{BITCOIN_BIP21_URI_SCHEME}:{addr}?{query_str}"
+    else:
+        return f"{BITCOIN_BIP21_URI_SCHEME}:{addr}"
