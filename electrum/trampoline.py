@@ -59,7 +59,12 @@ def trampolines_by_id():
 
 
 def is_hardcoded_trampoline(node_id: bytes) -> bool:
-    return node_id in trampolines_by_id()
+    try:
+        trampoline_pubkeys = is_hardcoded_trampoline._trampoline_pubkeys
+    except AttributeError:
+        trampoline_pubkeys = set(x.pubkey for x in hardcoded_trampoline_nodes().values())
+        is_hardcoded_trampoline._trampoline_pubkeys = trampoline_pubkeys
+    return node_id in trampoline_pubkeys
 
 
 def encode_routing_info(r_tags: Sequence[Sequence[Sequence[Any]]]) -> List[bytes]:
