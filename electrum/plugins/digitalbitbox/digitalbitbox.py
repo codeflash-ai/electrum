@@ -60,6 +60,8 @@ class DeviceErased(UserFacingException):
 
 
 def to_hexstr(s):
+    if isinstance(s, bytes):
+        return s.hex()
     return binascii.hexlify(s).decode('ascii')
 
 
