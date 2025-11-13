@@ -60,8 +60,11 @@ class NWCServerPlugin(BasePlugin):
         self.nwc_server = None   # type: Optional[NWCServer]
         self.taskgroup = OldTaskGroup()
         self.initialized = False
-        if not self.config.NWC_RELAY:  # type: ignore  # defined in __init__
-            self.config.NWC_RELAY = self.config.NOSTR_RELAYS.split(',')[0]
+        nwc_relay = getattr(self.config, 'NWC_RELAY', None)
+        nostr_relays = getattr(self.config, 'NOSTR_RELAYS', '')
+        if not nwc_relay:
+            relay = nostr_relays.split(',', 1)[0]
+            self.config.NWC_RELAY = relay
         self.logger.debug(f"NWCServerPlugin created, waiting for wallet to load...")
 
     def start_plugin(self, wallet: 'Abstract_Wallet'):
@@ -158,19 +161,21 @@ class NWCServerPlugin(BasePlugin):
     def serialize_connection_uri(self, client_secret_hex: str, our_pubkey_hex: str) -> str:
         base_uri = f"{self.URI_SCHEME}{our_pubkey_hex}"
 
-        # the NWC_RELAY is added first as this is the first relay parsed by clients
-        query_params = [f"relay={urllib.parse.quote(self.config.NWC_RELAY)}"]  # type: ignore
-        for relay in self.config.NOSTR_RELAYS.split(",")[:5]:
-            if relay != self.config.NWC_RELAY:  # type: ignore
+        # The NWC_RELAY is added first as this is the first relay parsed by clients
+        nwc_relay = self.config.NWC_RELAY  # type: ignore
+        nostr_relays = self.config.NOSTR_RELAYS  # type: ignore
+
+        # Pre-split relays once, only up to 6 parts (ensures [:5] below is always valid and avoids splitting the whole string if very long)
+        relays = nostr_relays.split(",", 5)
+        query_params = [f"relay={urllib.parse.quote(nwc_relay)}"]
+        for relay in relays[:5]:
+            if relay != nwc_relay:
                 query_params.append(f"relay={urllib.parse.quote(relay)}")
 
         query_params.append(f"secret={client_secret_hex}")
 
-        # Construct the final URI
-        query_string = "&".join(query_params)
-        uri = f"{base_uri}?{query_string}"
-
-        return uri
+        # Construct the final URI efficiently
+        return f"{base_uri}?{'&'.join(query_params)}"
 
 
 class NWCServer(Logger, EventListener):
