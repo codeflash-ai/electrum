@@ -58,6 +58,7 @@ class HW_PluginBase(BasePlugin, ABC):
         self.device = self.keystore_class.device
         self.keystore_class.plugin = self
         self._ignore_outdated_fw = False
+        self._device_manager = self.parent.device_manager
 
     def is_enabled(self):
         return True
@@ -93,7 +94,7 @@ class HW_PluginBase(BasePlugin, ABC):
     def get_client(self, keystore: 'Hardware_KeyStore', force_pair: bool = True, *,
                    devices: Sequence['Device'] = None,
                    allow_user_interaction: bool = True) -> Optional['HardwareClientBase']:
-        devmgr = self.device_manager()
+        devmgr = self._device_manager
         handler = keystore.handler
         client = devmgr.client_for_keystore(self, handler, keystore, force_pair,
                                             devices=devices,
@@ -318,8 +319,10 @@ class HardwareHandlerBase:
 
     def get_gui_thread(self) -> Optional['threading.Thread']:
         if self.win is not None:
-            if hasattr(self.win, 'gui_thread'):
+            try:
                 return self.win.gui_thread
+            except AttributeError:
+                pass
 
     def update_status(self, paired: bool) -> None:
         pass
