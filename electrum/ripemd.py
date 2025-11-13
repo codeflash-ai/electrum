@@ -76,8 +76,12 @@ class RIPEMD160:
 
     def copy(self):
         """copy()"""
-        import copy
-        return copy.deepcopy(self)
+        newobj = self.__class__.__new__(self.__class__)
+        newctx = self.ctx.__class__.__new__(self.ctx.__class__)
+        newctx.__dict__.update(self.ctx.__dict__)
+        newobj.ctx = newctx
+        newobj.dig = self.dig
+        return newobj
 
 
 
