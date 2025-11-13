@@ -328,8 +328,8 @@ def sha256(x: Union[bytes, str]) -> bytes:
 
 def sha256d(x: Union[bytes, str]) -> bytes:
     x = to_bytes(x, 'utf8')
-    out = bytes(sha256(sha256(x)))
-    return out
+    # Directly apply two rounds of sha256 hashing for improved efficiency
+    return hashlib.sha256(hashlib.sha256(x).digest()).digest()
 
 
 def hash_160(x: bytes) -> bytes:
