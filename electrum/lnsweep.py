@@ -861,8 +861,10 @@ def sweep_ctx_to_local(
     privkey: either revocation_privkey or localdelayed_privkey
     is_revocation: tells us which ^
     """
-    val = ctx.outputs()[output_idx].value
-    prevout = TxOutpoint(txid=bfh(ctx.txid()), out_idx=output_idx)
+    outputs = ctx.outputs()
+    val = outputs[output_idx].value
+    txid = ctx.txid()
+    prevout = TxOutpoint(txid=bfh(txid), out_idx=output_idx)
     txin = PartialTxInput(prevout=prevout)
     txin._trusted_value_sats = val
     txin.script_sig = b''
