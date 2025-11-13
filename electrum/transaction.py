@@ -446,10 +446,61 @@ class TxInput:
     def witness_elements(self) -> Sequence[bytes]:
         if not self.witness:
             return []
-        vds = BCDataStream()
-        vds.write(self.witness)
-        n = vds.read_compact_size()
-        return list(vds.read_bytes(vds.read_compact_size()) for i in range(n))
+        
+        data = self.witness
+        length = len(data)
+        ptr = 0
+
+        try:
+            # Read number of witness elements
+            if ptr >= length:
+                raise Exception("attempt to read past end of buffer")
+            size = data[ptr]
+            ptr += 1
+            if size == 253:
+                if ptr + 2 > length: raise Exception("attempt to read past end of buffer")
+                size = int.from_bytes(data[ptr:ptr+2], 'little')
+                ptr += 2
+            elif size == 254:
+                if ptr + 4 > length: raise Exception("attempt to read past end of buffer")
+                size = int.from_bytes(data[ptr:ptr+4], 'little')
+                ptr += 4
+            elif size == 255:
+                if ptr + 8 > length: raise Exception("attempt to read past end of buffer")
+                size = int.from_bytes(data[ptr:ptr+8], 'little')
+                ptr += 8
+            n = size
+
+            result = []
+            for i in range(n):
+                # Read element size
+                if ptr >= length:
+                    raise Exception("attempt to read past end of buffer")
+                elem_size = data[ptr]
+                ptr += 1
+                if elem_size == 253:
+                    if ptr + 2 > length: raise Exception("attempt to read past end of buffer")
+                    elem_size = int.from_bytes(data[ptr:ptr+2], 'little')
+                    ptr += 2
+                elif elem_size == 254:
+                    if ptr + 4 > length: raise Exception("attempt to read past end of buffer")
+                    elem_size = int.from_bytes(data[ptr:ptr+4], 'little')
+                    ptr += 4
+                elif elem_size == 255:
+                    if ptr + 8 > length: raise Exception("attempt to read past end of buffer")
+                    elem_size = int.from_bytes(data[ptr:ptr+8], 'little')
+                    ptr += 8
+                
+                if ptr + elem_size > length:
+                    raise Exception("attempt to read past end of buffer")
+                result.append(data[ptr:ptr+elem_size])
+                ptr += elem_size
+            return result
+        except Exception:
+            vds = BCDataStream()
+            vds.write(self.witness)
+            n = vds.read_compact_size()
+            return list(vds.read_bytes(vds.read_compact_size()) for i in range(n))
 
     def is_segwit(self, *, guess_for_address=False) -> bool:
         if self.witness not in (b'\x00', b'', None):
@@ -625,9 +676,11 @@ class BCDataStream(object):
 
     def write_boolean(self, val): return self.write(b'\x01' if val else b'\x00')
     def write_int16(self, val): return self._write_num('<h', val)
-    def write_uint16(self, val): return self._write_num('<H', val)
+    def write_uint16(self, val):
+        return self._write_num('<H', val)
     def write_int32(self, val): return self._write_num('<i', val)
-    def write_uint32(self, val): return self._write_num('<I', val)
+    def write_uint32(self, val):
+        return self._write_num('<I', val)
     def write_int64(self, val): return self._write_num('<q', val)
     def write_uint64(self, val): return self._write_num('<Q', val)
 
@@ -671,8 +724,18 @@ class BCDataStream(object):
         return i
 
     def _write_num(self, format, num):
-        s = struct.pack(format, num)
-        self.write(s)
+        # Fast-path: batch struct.pack and extend assignment
+        s: bytes = struct.pack(format, num)
+
+        inp = self.input
+        if inp is None:
+            # Direct assignment is fastest
+            self.input = bytearray(s)
+        else:
+            # Use extend() instead of += for efficiency (avoids creating a new object)
+            inp.extend(s)
+        # Return behavior preserved: The original _write_num doesn't return, but mainline code expects None
+        # which is the case here.
 
 
 def script_GetOp(_bytes : bytes):
