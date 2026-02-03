@@ -32,8 +32,9 @@ multidict==6.4.4 \
     --hash=sha256:69ee9e6ba214b5245031b76233dd95408a0fd57fdb019ddcc1ead4790932a8e8
 packaging==25.0 \
     --hash=sha256:d443872c98d677bf60f6a1f2f8c1cb748e8fe762d2bf9d3148b5599295b0fc4f
-pip==25.1.1 \
-    --hash=sha256:3de45d411d308d5054c2168185d8da7f9a2cd753dbac8acbfa88a8909ecd9077
+pip==26.0 \
+    --hash=sha256:3ce220a0a17915972fbf1ab451baae1521c4539e778b28127efa79b974aff0fa \
+    --hash=sha256:98436feffb9e31bc9339cf369fd55d3331b1580b6a6f1173bacacddcf9c34754
 propcache==0.3.1 \
     --hash=sha256:40d980c33765359098837527e18eddefc9a24cea5b45e078a7f3bb5b032c6ecf
 protobuf==3.20.3 \
